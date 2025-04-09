@@ -1,0 +1,84 @@
+---
+description: This is the high level view of rules for the project generally and guide to specific rules for tools.
+globs: 
+alwaysApply: false
+---
+# Project Rules
+
+## Environment Setup
+- **ALWAYS USE A VENV.**
+- **ALWAYS USE GIT.**
+- This project is done in Python.
+- Use your local hosted Ollama image.
+- Use your local hosted Supabase database running in Docker.
+- Use the development environment as you see fit to help me learn and build the project.
+
+## Rules structure
+- Project Rules: Overall architecture, environment setup, and high-level project considerations.
+- Python Rules: Python best practices, code style, and project structure.
+FastAPI Guidelines: API structure, dependency injection, endpoint conventions.
+Supabase & Graph Guidelines: Database integration, RLS policies, GraphQL best practices.
+AI SDK & Model Management: Pydantic usage, fallback mechanisms, rate limiting, API key handling.
+Testing Guidelines: Concise key points or a reference to a separate testing document.
+
+## Architecture and Framework
+- Use Pydantic for agent and tool formats.
+- Use FastAPI as the web framework.
+- Maintain two UIs: a custom web UI and a CLI for testing/development.
+- Design the system to swap between LLM providers (Google, OpenAI, Claude, etc.) but default to Ollama with LLama 3.1 and nomic-embed-text.
+- Design the system to support swapping out databases.
+- Webhooks should be as language- and provider-agnostic as possible.
+- Support access via voice commands (Home Assistant, Hey Google, Hey Siri, Open Web UI).
+
+## Security and Scalability
+- The project must be designed to be as secure as possible.
+- The project must be designed to be as scalable as possible.
+
+## Python Rules and Best Practices
+- Write concise, technical responses with accurate Python examples.
+- Be guided by the Zen of Python.
+- Use functional and declarative programming; avoid classes where possible.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., `is_active`, `has_permission`).
+- Use lowercase with underscores for directories and files (e.g., `routers/user_routes.py`).
+- Follow the Receive an Object, Return an Object (RORO) pattern.
+
+## FastAPI Guidelines
+- Use `def` for pure functions and `async def` for asynchronous operations.
+- Apply type hints for all function signatures.
+- Use Pydantic models for input validation and response schemas.
+- Organize files into exported routers, sub-routes, utilities, static content, and types (models/schemas).
+- Handle errors and edge cases at the beginning of functions and use early returns.
+- Use guard clauses and custom error types for consistent error handling.
+- Rely on FastAPI's dependency injection for managing state and shared resources.
+- Minimize blocking operations by using asynchronous functions for I/O-bound tasks.
+- Use caching (e.g., Redis or in-memory) and lazy loading for performance optimization.
+
+## Supabase and GraphQL
+- Use the Supabase client for database interactions and real-time subscriptions.
+- Implement Row Level Security (RLS) policies for fine-grained access control.
+- Use Supabase Auth for user authentication and management.
+- Leverage Supabase Storage for file uploads.
+- Utilize Supabase Edge Functions for serverless API endpoints when needed.
+- Use the generated GraphQL client (Genql) for type-safe API interactions.
+- Optimize GraphQL queries to fetch only necessary data.
+
+## AI SDK and Model Management
+- Use Pydantic for all AI interactions.
+- Ensure proper error handling for AI responses and model switching.
+- Provide fallback mechanisms when an AI model is unavailable.
+- Gracefully handle rate limiting and quota exceeded scenarios.
+- Provide clear error messages to the user when AI interactions fail.
+- Sanitize user input before sending to AI models.
+- Store API keys and sensitive information in environment variables.
+
+## Testing and Documentation
+- Write unit tests for utility functions and hooks.
+- Implement integration tests for complex components and pages.
+- Create end-to-end tests for critical user flows.
+- Use Supabase local development for database testing.
+- Maintain clear documentation including setup instructions, Supabase schema, RLS policies, and Edge Functions.
+
+*Load these project rules into your settings as the development guidelines.*
+
+

@@ -1,0 +1,14 @@
+---
+description: Fast API rules
+globs: 
+---
+## FastAPI Guidelines
+- Use `def` for pure functions and `async def` for asynchronous operations.
+- Apply type hints for all function signatures.
+- Use Pydantic models for input validation and response schemas.
+- Organize files into exported routers, sub-routes, utilities, static content, and types (models/schemas).
+- Handle errors and edge cases at the beginning of functions and use early returns.
+- Use guard clauses and custom error types for consistent error handling.
+- Rely on FastAPI's dependency injection for managing state and shared resources.
+- Minimize blocking operations by using asynchronous functions for I/O-bound tasks.
+- Use caching (e.g., Redis or in-memory) and lazy loading for performance optimization.

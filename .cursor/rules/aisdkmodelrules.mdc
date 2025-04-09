@@ -1,0 +1,12 @@
+---
+description: These are the rules for AI SDK and Model management
+globs: 
+---
+## AI SDK and Model Management
+- Use Pydantic for all AI interactions.
+- Ensure proper error handling for AI responses and model switching.
+- Provide fallback mechanisms when an AI model is unavailable.
+- Gracefully handle rate limiting and quota exceeded scenarios.
+- Provide clear error messages to the user when AI interactions fail.
+- Sanitize user input before sending to AI models.
+- Store API keys and sensitive information in environment variables.

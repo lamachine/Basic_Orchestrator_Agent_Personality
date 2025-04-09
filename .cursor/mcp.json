@@ -1,0 +1,75 @@
+{
+    "mcpServers": {
+
+      "filesystem": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
+          "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
+          "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+          "mcp/filesystem",
+          "/projects"
+        ]
+      },
+
+      "brave-search": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "-e",
+          "BRAVE_API_KEY",
+          "mcp/brave-search"
+        ],
+        "env": {
+          "BRAVE_API_KEY": "BSANm4_sBhqSsWOzxtAP9fqSrc3VxAv"
+        }
+      },
+
+      "git": {
+        "command": "docker",
+        "args": [
+          "run",
+          "--rm",
+          "-i",
+          "--mount", "type=bind,src=C:/Users/Owner/Documents/GitHub/MyAiStaffSwarm,dst=/repo",
+          "mcp/git",
+          "--repository",
+          "/repo"
+        ]
+      },
+      
+      "postgres": {
+        "command": "docker",
+        "args": [
+          "run", 
+          "-i", 
+          "--rm",
+          "-e", "DEBUG=1",
+          "-e", "NODE_DEBUG=*",
+          "-e", "POSTGRES_DEBUG=1",
+          "mcp/postgres", 
+          "postgresql://user:password@host.docker.internal:5432/postgres"
+        ]
+      },
+      
+      "perplexity-ask": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "-e",
+          "PERPLEXITY_API_KEY",
+          "mcp/perplexity-ask"
+        ],
+        "env": {
+          "PERPLEXITY_API_KEY": "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"
+        }
+      }
+    }
+  }

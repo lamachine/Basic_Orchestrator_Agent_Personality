@@ -1,0 +1,8 @@
+requests
+python-dotenv
+supabase
+psycopg2-binary
+pgvector
+pydantic
+langgraph
+supabase

@@ -1,0 +1,13 @@
+---
+description: Rules for Supabase and GraphQL
+globs: .json
+---
+## Supabase and GraphQL
+- Use the Supabase client for database interactions and real-time subscriptions.
+- Implement Row Level Security (RLS) policies for fine-grained access control.
+- Use Supabase Auth for user authentication and management.
+- Leverage Supabase Storage for file uploads.
+- Utilize Supabase Edge Functions for serverless API endpoints when needed.
+- GraphQL is not in use yet, but will be added.  When available, use the following rules:
+    - Use the generated GraphQL client (Genql) for type-safe API interactions.
+    - Optimize GraphQL queries to fetch only necessary data.

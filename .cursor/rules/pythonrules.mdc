@@ -1,0 +1,14 @@
+---
+description: These are general python rules
+globs: *.py 
+---
+## Python Rules and Best Practices
+- Write concise, technical responses with accurate Python examples.
+- Be guided by the Zen of Python.
+- Use functional and declarative programming; avoid classes where possible.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., `is_active`, `has_permission`).
+- Use lowercase with underscores for directories and files (e.g., `routers/user_routes.py`).
+- Follow the Receive an Object, Return an Object (RORO) pattern.
+- Guide development towards object oriented and modular code.
+- Avoid version constraints in `requirements.txt` unless absolutely necessary (e.g., for new/unstable packages); let pip handle dependency resolution.

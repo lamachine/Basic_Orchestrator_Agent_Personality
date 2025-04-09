@@ -1,0 +1,28 @@
+2025-04-09 13:12:44,898 - INFO - [__main__] - general -  - Logging initialized successfully
+2025-04-09 13:12:44,983 - INFO - [__main__] - general -  - Database initialized successfully
+2025-04-09 13:12:44,983 - INFO - [__main__] - general -  - Initializing LLM Agent with model: llama3.1
+2025-04-09 13:12:44,983 - INFO - [__main__] - general -  - API URL: http://localhost:11434/api/generate
+2025-04-09 13:12:44,984 - INFO - [__main__] - general -  - Database available: True
+2025-04-09 13:12:44,984 - INFO - [__main__] - general -  - Starting LLM Agent CLI
+2025-04-09 13:12:59,700 - INFO - [__main__] - general -  - User requested exit. Shutting down.
+2025-04-09 13:13:52,372 - INFO - [__main__] - general -  - Logging initialized successfully
+2025-04-09 13:13:52,457 - INFO - [__main__] - general -  - Database initialized successfully
+2025-04-09 13:13:52,458 - INFO - [__main__] - general -  - Initializing LLM Agent with model: llama3.1
+2025-04-09 13:13:52,458 - INFO - [__main__] - general -  - API URL: http://localhost:11434/api/generate
+2025-04-09 13:13:52,458 - INFO - [__main__] - general -  - Database available: True
+2025-04-09 13:13:52,459 - INFO - [__main__] - general -  - Starting LLM Agent CLI
+2025-04-09 13:14:43,579 - INFO - [__main__] - general -  - Processing user input
+2025-04-09 13:14:43,579 - INFO - [__main__] - general -  - Processing chat input (length: 76)
+2025-04-09 13:14:43,637 - INFO - [__main__] - general -  - Started conversation with session ID: 19
+2025-04-09 13:14:43,654 - INFO - [__main__] - general -  - Stored user message in database
+2025-04-09 13:14:43,665 - INFO - [__main__] - general -  - Querying LLM model: llama3.1
+2025-04-09 13:14:48,098 - INFO - [__main__] - general -  - Received response from LLM (length: 117)
+2025-04-09 13:14:48,148 - INFO - [__main__] - general -  - Stored assistant response in database
+2025-04-09 13:14:48,148 - INFO - [__main__] - general -  - Received response from agent
+2025-04-09 13:15:06,008 - INFO - [__main__] - general -  - Processing user input
+2025-04-09 13:15:06,008 - INFO - [__main__] - general -  - Processing chat input (length: 30)
+2025-04-09 13:15:06,042 - INFO - [__main__] - general -  - Stored user message in database
+2025-04-09 13:15:06,050 - INFO - [__main__] - general -  - Querying LLM model: llama3.1
+2025-04-09 13:15:08,581 - INFO - [__main__] - general -  - Received response from LLM (length: 59)
+2025-04-09 13:15:08,633 - INFO - [__main__] - general -  - Stored assistant response in database
+2025-04-09 13:15:08,633 - INFO - [__main__] - general -  - Received response from agent
