@@ -42,7 +42,7 @@ from enum import Enum
 
 # Local application imports
 # Import the correct GraphState from the graph definition file
-from src.graphs.orchstrator_graph import (
+from src.graphs.orchestrator_graph import (
     GraphState,
     Message,          # Keep if needed by the actual orchestrator logic later
     MessageRole       # Keep if needed by the actual orchestrator logic later

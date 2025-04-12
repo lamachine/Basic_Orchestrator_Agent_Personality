@@ -3,9 +3,10 @@
 import pytest
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 import sys
 from unittest.mock import MagicMock
+import json
 
 # Environment setup for tests
 @pytest.fixture(autouse=True)
@@ -13,10 +14,14 @@ def setup_test_env():
     """Setup test environment variables"""
     os.environ['SUPABASE_URL'] = 'http://localhost:54321'
     os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-key'
+    os.environ['OLLAMA_API_URL'] = 'http://localhost:11434'
+    os.environ['OLLAMA_EMBEDDING_MODEL'] = 'nomic-embed-text'
     yield
     # Cleanup
     os.environ.pop('SUPABASE_URL', None)
     os.environ.pop('SUPABASE_SERVICE_ROLE_KEY', None)
+    os.environ.pop('OLLAMA_API_URL', None)
+    os.environ.pop('OLLAMA_EMBEDDING_MODEL', None)
 
 # Shared test data
 @pytest.fixture
@@ -25,8 +30,19 @@ def sample_message_data():
     return {
         'role': 'user',
         'content': 'test message',
-        'metadata': {'source': 'test'},
+        'metadata': {'source': 'test', 'user_id': 'developer'},
         'created_at': datetime.now().isoformat()
+    }
+
+@pytest.fixture
+def sample_conversation_metadata():
+    """Sample conversation metadata for tests"""
+    return {
+        'created_at': datetime.now().isoformat(),
+        'updated_at': datetime.now().isoformat(),
+        'user_id': 'developer',
+        'title': 'Test Conversation',
+        'description': 'A test conversation'
     }
 
 @pytest.fixture
@@ -42,8 +58,50 @@ def sample_state_data():
             'task1': 'success'
         },
         'final_result': None,
-        'messages': []
+        'messages': [],
+        'current_task_status': 'pending'
     }
+
+@pytest.fixture
+def mock_supabase_client():
+    """Create a mock Supabase client"""
+    mock = MagicMock()
+    
+    # Mock table operations
+    table_mock = MagicMock()
+    mock.table.return_value = table_mock
+    
+    # Mock insert operations
+    insert_mock = MagicMock()
+    table_mock.insert.return_value = insert_mock
+    insert_mock.execute.return_value = MagicMock(data=[{'id': 1}])
+    
+    # Mock select operations
+    select_mock = MagicMock()
+    table_mock.select.return_value = select_mock
+    select_mock.eq.return_value = select_mock
+    select_mock.order.return_value = select_mock
+    select_mock.limit.return_value = select_mock
+    select_mock.execute.return_value = MagicMock(data=[
+        {'session_id': 1, 'role': 'user', 'message': 'Hello', 
+         'metadata': json.dumps({'user_id': 'developer'})}
+    ])
+    
+    return mock
+
+@pytest.fixture
+def mock_ollama_client():
+    """Create a mock Ollama client"""
+    mock = MagicMock()
+    
+    # Create a response with an embedding attribute
+    embedding_response = MagicMock()
+    embedding_response.embedding = [0.1] * 768
+    
+    # Mock embeddings method
+    mock.embeddings.return_value = embedding_response
+    
+    return mock
 
 # Test utilities
 def assert_datetime_approx(dt1: str, dt2: str, tolerance_seconds: int = 1):
@@ -74,6 +132,14 @@ class MockDatabaseError(Exception):
     """Mock DatabaseError for testing."""
     pass
 
+class MockStateError(Exception):
+    """Mock StateError for testing."""
+    pass
+
+class MockStateTransitionError(MockStateError):
+    """Mock StateTransitionError for testing."""
+    pass
+
 # Patch the database module
 if 'src.services.db_services.db_manager' in sys.modules:
     db_module = sys.modules['src.services.db_services.db_manager']
@@ -84,6 +150,25 @@ else:
 # Add missing classes to db_manager
 db_module.DatabaseError = MockDatabaseError
 db_module.ConversationNotFoundError = type('ConversationNotFoundError', (Exception,), {})
+db_module.StateError = MockStateError
+db_module.StateTransitionError = MockStateTransitionError
+
+# Define enum-like classes that match the actual enums
+class MessageRole:
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+    TOOL = "tool"
+
+class TaskStatus:
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+# Add enums to db_manager
+db_module.MessageRole = MessageRole
+db_module.TaskStatus = TaskStatus
 
 # Define fixtures that can be used across tests
 @pytest.fixture

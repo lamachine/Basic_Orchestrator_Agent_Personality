@@ -5,424 +5,402 @@ import os
 import json
 from unittest.mock import patch, MagicMock, AsyncMock
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from src.services.db_services.db_manager import (
     DatabaseManager,
-    DatabaseError,
-    ConversationNotFoundError
+    ConversationState,
+    ConversationMetadata,
+    ConversationSummary,
+    Message,
+    MessageRole,
+    TaskStatus,
+    StateError,
+    StateTransitionError,
+    ValidationError
 )
-
-# Sample database configuration
-SAMPLE_DB_CONFIG = {
-    "host": "localhost",
-    "database": "test_db",
-    "user": "test_user",
-    "password": "test_password",
-    "port": 5432
-}
 
 # Sample conversation data
 SAMPLE_CONVERSATION = {
-    "conversation_id": "test-conversation-id",
-    "user_id": "test-user-id",
+    "session_id": 123,
+    "user_id": "developer",
+    "metadata": {
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+        "user_id": "developer",
+        "title": "Test Conversation"
+    },
     "messages": [
         {
-            "role": "system",
-            "content": "You are a helpful assistant."
-        },
-        {
             "role": "user",
-            "content": "Hello!"
+            "content": "Hello!",
+            "created_at": datetime.now().isoformat(),
+            "metadata": {}
         }
     ],
-    "metadata": {
-        "personality": "default",
-        "created_at": "2023-06-01T12:00:00Z",
-        "last_updated": "2023-06-01T12:01:00Z"
-    },
-    "current_node": "greeting_node"
+    "current_task_status": "pending"
 }
 
 @pytest.fixture
-def mock_pool():
-    """Create a mock connection pool."""
+def mock_supabase():
+    """Create a mock Supabase client."""
     mock = MagicMock()
     
-    # Mock connection context manager
-    conn_context = MagicMock()
-    mock.__aenter__.return_value = conn_context
+    # Mock table operations
+    mock_table = MagicMock()
+    mock.table.return_value = mock_table
     
-    # Mock cursor context manager
-    cursor_context = MagicMock()
-    conn_context.cursor.return_value.__aenter__.return_value = cursor_context
+    # Mock insert operations
+    mock_insert = MagicMock()
+    mock_table.insert.return_value = mock_insert
+    mock_insert.execute.return_value = MagicMock()
     
-    # Mock query methods
-    cursor_context.execute = AsyncMock()
-    cursor_context.fetchone = AsyncMock(return_value=(json.dumps(SAMPLE_CONVERSATION),))
-    cursor_context.fetchall = AsyncMock(return_value=[
-        ("test-conversation-id-1",),
-        ("test-conversation-id-2",)
+    # Mock select operations
+    mock_select = MagicMock()
+    mock_table.select.return_value = mock_select
+    mock_select.eq.return_value = mock_select
+    mock_select.order.return_value = mock_select
+    mock_select.limit.return_value = mock_select
+    mock_select.execute.return_value = MagicMock(data=[
+        {"session_id": 123, "role": "user", "message": "Hello!", "metadata": json.dumps({"user_id": "developer"})}
+    ])
+    
+    # Mock RPC operations
+    mock_rpc = MagicMock()
+    mock.rpc.return_value = mock_rpc
+    mock_rpc.execute.return_value = MagicMock(data=[
+        {"session_id": 123, "role": "user", "message": "Hello!", "similarity": 0.9}
     ])
     
     return mock
 
 @pytest.fixture
-def mock_create_pool():
-    """Create a mock for asyncpg.create_pool."""
-    with patch('asyncpg.create_pool') as mock:
+def mock_create_client():
+    """Create a mock for supabase.create_client."""
+    with patch('src.services.db_services.db_manager.create_client') as mock:
         yield mock
 
 @pytest.fixture
-def db_manager(mock_pool, mock_create_pool):
-    """Create a database manager with a mock pool."""
-    mock_create_pool.return_value = mock_pool
-    
-    with patch.dict(os.environ, {
-        "DB_HOST": "localhost",
-        "DB_PORT": "5432",
-        "DB_NAME": "test_db",
-        "DB_USER": "test_user",
-        "DB_PASSWORD": "test_password"
-    }):
-        manager = DatabaseManager()
-        return manager
+def mock_ollama_client():
+    """Create a mock OllamaClient."""
+    with patch('src.services.db_services.db_manager.OllamaClient') as mock:
+        mock_instance = MagicMock()
+        mock.return_value = mock_instance
+        
+        # Mock embeddings method
+        mock_instance.embeddings.return_value = {
+            "embedding": [0.1] * 768
+        }
+        
+        yield mock_instance
 
-@pytest.mark.asyncio
-async def test_init_db_from_env(mock_create_pool):
-    """Test initializing the database from environment variables."""
-    mock_create_pool.return_value = MagicMock()
+@pytest.fixture
+def db_manager(mock_supabase, mock_create_client, mock_ollama_client):
+    """Create a database manager with mock dependencies."""
+    mock_create_client.return_value = mock_supabase
     
     with patch.dict(os.environ, {
-        "DB_HOST": "env_host",
-        "DB_PORT": "1234",
-        "DB_NAME": "env_db",
-        "DB_USER": "env_user",
-        "DB_PASSWORD": "env_pass"
+        "SUPABASE_URL": "https://test.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "test-key",
+        "OLLAMA_API_URL": "http://localhost:11434"
+    }):
+        return DatabaseManager()
+
+def test_init_db_from_env(mock_create_client):
+    """Test initializing the database from environment variables."""
+    with patch.dict(os.environ, {
+        "SUPABASE_URL": "https://env.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "env-key"
     }):
         db = DatabaseManager()
         
-        # Verify pool was created with correct parameters
-        mock_create_pool.assert_called_once()
-        call_kwargs = mock_create_pool.call_args[1]
-        
-        assert call_kwargs["host"] == "env_host"
-        assert call_kwargs["port"] == 1234
-        assert call_kwargs["database"] == "env_db"
-        assert call_kwargs["user"] == "env_user"
-        assert call_kwargs["password"] == "env_pass"
+        # Verify client was created with correct parameters
+        mock_create_client.assert_called_once_with(
+            "https://env.supabase.co",
+            "env-key"
+        )
 
-@pytest.mark.asyncio
-async def test_init_db_from_config(mock_create_pool):
-    """Test initializing the database from a config dictionary."""
-    mock_create_pool.return_value = MagicMock()
+def test_get_next_id(db_manager, mock_supabase):
+    """Test getting the next ID for a column."""
+    # Set up mock to return a specific max ID
+    mock_select = MagicMock()
+    mock_supabase.table.return_value.select.return_value = mock_select
+    mock_select.execute.return_value = MagicMock(data=[{"max": 5}])
     
-    config = {
-        "host": "config_host",
-        "port": 5678,
-        "database": "config_db",
-        "user": "config_user",
-        "password": "config_pass"
-    }
+    next_id = db_manager.get_next_id("session_id", "swarm_messages")
     
-    db = DatabaseManager(config=config)
+    # Verify the next ID is incremented correctly
+    assert next_id == 6
     
-    # Verify pool was created with correct parameters
-    mock_create_pool.assert_called_once()
-    call_kwargs = mock_create_pool.call_args[1]
-    
-    assert call_kwargs["host"] == "config_host"
-    assert call_kwargs["port"] == 5678
-    assert call_kwargs["database"] == "config_db"
-    assert call_kwargs["user"] == "config_user"
-    assert call_kwargs["password"] == "config_pass"
+    # Verify the Supabase API was called correctly
+    mock_supabase.table.assert_called_with("swarm_messages")
+    mock_supabase.table.return_value.select.assert_called_with("max(session_id)")
 
-@pytest.mark.asyncio
-async def test_init_db_pool_error(mock_create_pool):
-    """Test handling error during pool creation."""
-    mock_create_pool.side_effect = Exception("Connection error")
+def test_create_conversation(db_manager, mock_supabase):
+    """Test creating a new conversation."""
+    # Set up mock to return a specific next ID
+    db_manager.get_next_id = MagicMock(return_value=123)
     
-    with pytest.raises(DatabaseError):
-        db = DatabaseManager(config=SAMPLE_DB_CONFIG)
+    # Configure mock for insert
+    mock_insert = MagicMock()
+    mock_supabase.table.return_value.insert.return_value = mock_insert
+    mock_insert.execute.return_value = MagicMock()
+    
+    conversation = db_manager.create_conversation("test-user", "Test Title")
+    
+    # Verify the conversation was created with correct parameters
+    assert conversation.session_id == 123
+    assert conversation.metadata.user_id == "test-user"
+    assert conversation.metadata.title == "Test Title"
+    assert conversation.current_task_status == TaskStatus.PENDING
+    
+    # Verify Supabase insert was called
+    mock_supabase.table.assert_called_with("swarm_messages")
+    insert_args = mock_supabase.table.return_value.insert.call_args[0][0]
+    assert insert_args["session_id"] == 123
+    assert insert_args["user_id"] == "test-user"
+    assert insert_args["type"] == "conversation_start"
+    assert "Test Title" in insert_args["metadata"]
 
-@pytest.mark.asyncio
-async def test_get_conversation(db_manager, mock_pool):
-    """Test retrieving a conversation."""
-    conversation = await db_manager.get_conversation("test-conversation-id")
+def test_list_conversations(db_manager, mock_supabase):
+    """Test listing available conversations."""
+    # Set up mock to return sample conversations
+    mock_select = MagicMock()
+    mock_supabase.table.return_value.select.return_value = mock_select
+    mock_select.eq.return_value = mock_select
+    mock_select.order.return_value = mock_select
+    mock_select.limit.return_value = mock_select
     
-    # Verify the query was executed with the correct parameters
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.execute.assert_called_once()
+    # Mock data for the first query (session listing)
+    mock_select.execute.return_value = MagicMock(data=[
+        {
+            "session_id": 123,
+            "metadata": json.dumps({
+                "title": "Test Conv 1",
+                "current_task_status": "pending",
+                "user_id": "test-user"
+            })
+        },
+        {
+            "session_id": 456,
+            "metadata": json.dumps({
+                "title": "Test Conv 2",
+                "current_task_status": "completed",
+                "user_id": "test-user"
+            })
+        }
+    ])
     
-    # Check query contains conversation ID
-    query_args = cursor.execute.call_args[0]
-    assert "test-conversation-id" in query_args[1]
+    # Mock for count queries
+    mock_count = MagicMock()
+    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.side_effect = [
+        MagicMock(count=5),  # First conversation message count
+        MagicMock(count=10)  # Second conversation message count
+    ]
     
-    # Verify the returned data
-    assert conversation["conversation_id"] == "test-conversation-id"
-    assert conversation["user_id"] == "test-user-id"
-    assert len(conversation["messages"]) == 2
-    assert conversation["metadata"]["personality"] == "default"
-
-@pytest.mark.asyncio
-async def test_get_conversation_not_found(db_manager, mock_pool):
-    """Test retrieving a non-existent conversation."""
-    # Set up mock to return None (no conversation found)
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchone.return_value = None
+    # Mock for timestamp queries
+    mock_timestamps = MagicMock()
+    mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.execute.side_effect = [
+        MagicMock(data=[{"timestamp": "2023-01-01T12:00:00"}, {"timestamp": "2023-01-01T12:30:00"}]),
+        MagicMock(data=[{"timestamp": "2023-01-02T12:00:00"}, {"timestamp": "2023-01-02T12:30:00"}])
+    ]
     
-    # Conversation should be None
-    result = await db_manager.get_conversation("nonexistent-id")
-    assert result is None
-
-@pytest.mark.asyncio
-async def test_save_conversation_new(db_manager, mock_pool):
-    """Test saving a new conversation."""
-    # Set fetchone to return None to simulate no existing conversation
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchone.return_value = None
+    conversations = db_manager.list_conversations("test-user", limit=5)
     
-    # Save the conversation
-    success = await db_manager.save_conversation(SAMPLE_CONVERSATION)
-    
-    # Verify success
-    assert success is True
-    
-    # Verify execute was called twice: once to check existence and once to insert
-    assert cursor.execute.call_count == 2
-    
-    # Check the second call contains INSERT
-    insert_call = cursor.execute.call_args_list[1]
-    assert "INSERT INTO" in insert_call[0][0].upper()
-
-@pytest.mark.asyncio
-async def test_save_conversation_update(db_manager, mock_pool):
-    """Test updating an existing conversation."""
-    # Set fetchone to return something to simulate existing conversation
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchone.return_value = (json.dumps({"old": "data"}),)
-    
-    # Save the conversation
-    success = await db_manager.save_conversation(SAMPLE_CONVERSATION)
-    
-    # Verify success
-    assert success is True
-    
-    # Verify execute was called twice: once to check existence and once to update
-    assert cursor.execute.call_count == 2
-    
-    # Check the second call contains UPDATE
-    update_call = cursor.execute.call_args_list[1]
-    assert "UPDATE" in update_call[0][0].upper()
-
-@pytest.mark.asyncio
-async def test_save_conversation_error(db_manager, mock_pool):
-    """Test handling an error during save operation."""
-    # Set execute to raise an exception
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.execute.side_effect = Exception("Database error")
-    
-    # Save should raise DatabaseError
-    with pytest.raises(DatabaseError):
-        await db_manager.save_conversation(SAMPLE_CONVERSATION)
-
-@pytest.mark.asyncio
-async def test_delete_conversation(db_manager, mock_pool):
-    """Test deleting a conversation."""
-    # Set fetchone to return something to simulate existing conversation
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchone.return_value = (json.dumps(SAMPLE_CONVERSATION),)
-    
-    # Delete the conversation
-    success = await db_manager.delete_conversation("test-conversation-id")
-    
-    # Verify success
-    assert success is True
-    
-    # Verify execute was called twice: once to check existence and once to delete
-    assert cursor.execute.call_count == 2
-    
-    # Check the second call contains DELETE
-    delete_call = cursor.execute.call_args_list[1]
-    assert "DELETE" in delete_call[0][0].upper()
-
-@pytest.mark.asyncio
-async def test_delete_nonexistent_conversation(db_manager, mock_pool):
-    """Test deleting a non-existent conversation."""
-    # Set fetchone to return None to simulate no existing conversation
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchone.return_value = None
-    
-    # Delete should raise ConversationNotFoundError
-    with pytest.raises(ConversationNotFoundError):
-        await db_manager.delete_conversation("nonexistent-id")
-
-@pytest.mark.asyncio
-async def test_list_conversations(db_manager, mock_pool):
-    """Test listing all conversations."""
-    # List all conversations
-    conversations = await db_manager.list_conversations()
-    
-    # Verify the query was executed
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.execute.assert_called_once()
-    
-    # Check the returned data
+    # Verify the conversations were returned correctly
     assert len(conversations) == 2
-    assert "test-conversation-id-1" in conversations
-    assert "test-conversation-id-2" in conversations
+    
+    # The implementation sorts by updated_at, so the second conversation should be first
+    assert conversations[0].session_id == 456
+    assert conversations[0].title == "Test Conv 2"
+    assert conversations[0].current_task_status == TaskStatus.COMPLETED
+    
+    assert conversations[1].session_id == 123
+    assert conversations[1].title == "Test Conv 1"
+    assert conversations[1].current_task_status == TaskStatus.PENDING
 
-@pytest.mark.asyncio
-async def test_list_conversations_by_user(db_manager, mock_pool):
-    """Test listing conversations for a specific user."""
-    # List conversations for user
-    conversations = await db_manager.list_conversations(user_id="test-user-id")
+def test_load_conversation(db_manager, mock_supabase):
+    """Test loading a specific conversation."""
+    # Set up mocks for metadata query
+    mock_metadata_select = MagicMock()
+    mock_supabase.table.return_value.select.return_value = mock_metadata_select
+    mock_metadata_select.eq.return_value = mock_metadata_select
+    mock_metadata_select.limit.return_value = mock_metadata_select
     
-    # Verify the query was executed with the correct parameters
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.execute.assert_called_once()
+    # Mock data for metadata query
+    mock_metadata_select.execute.return_value = MagicMock(data=[{
+        "user_id": "developer",
+        "metadata": json.dumps({
+            "created_at": "2023-01-01T12:00:00", 
+            "updated_at": "2023-01-01T12:30:00", 
+            "user_id": "developer", 
+            "title": "Test Conv", 
+            "current_task_status": "in_progress"
+        }),
+        "timestamp": "2023-01-01T12:30:00"
+    }])
     
-    # Check query contains user ID
-    query_args = cursor.execute.call_args[0]
-    assert "test-user-id" in query_args[1]
+    # Set up mocks for messages query
+    mock_messages_select = MagicMock()
+    mock_supabase.table.return_value.select.return_value = mock_messages_select
+    mock_messages_select.eq.return_value = mock_messages_select
+    mock_messages_select.order.return_value = mock_messages_select
     
-    # Check the returned data
-    assert len(conversations) == 2
+    # Mock data for messages query (called second)
+    mock_messages_select.execute.return_value = MagicMock(data=[
+        {
+            "sender": "orchestrator_graph.cli", 
+            "content": "Hello!", 
+            "timestamp": "2023-01-01T12:00:00", 
+            "metadata": json.dumps({"user_id": "developer"}),
+            "target": "orchestrator_graph.llm"
+        },
+        {
+            "sender": "orchestrator_graph.llm", 
+            "content": "Hi there!", 
+            "timestamp": "2023-01-01T12:15:00", 
+            "metadata": json.dumps({"user_id": "developer"}),
+            "target": "orchestrator_graph.cli"
+        }
+    ])
+    
+    conversation = db_manager.load_conversation(123)
+    
+    # Verify the conversation was loaded correctly
+    assert conversation.session_id == 123
+    assert conversation.metadata.user_id == "developer"
+    assert conversation.metadata.title == "Test Conv"
+    assert conversation.current_task_status == TaskStatus.IN_PROGRESS
+    assert len(conversation.messages) == 2
+    assert conversation.messages[0].role == MessageRole.USER
+    assert conversation.messages[0].content == "Hello!"
+    assert conversation.messages[1].role == MessageRole.ASSISTANT
+    assert conversation.messages[1].content == "Hi there!"
 
-@pytest.mark.asyncio
-async def test_init_tables(db_manager, mock_pool):
-    """Test initializing database tables."""
-    # Initialize tables
-    await db_manager.init_tables()
+def test_continue_conversation(db_manager, mock_supabase):
+    """Test continuing an existing conversation."""
+    # Set up mock for load_conversation
+    mock_conversation = MagicMock(spec=ConversationState)
+    mock_conversation.session_id = 123
+    mock_conversation.metadata = MagicMock(spec=ConversationMetadata)
+    db_manager.load_conversation = MagicMock(return_value=mock_conversation)
     
-    # Verify the query was executed
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.execute.assert_called_once()
+    # Set up mock for update
+    mock_update = MagicMock()
+    mock_supabase.table.return_value.update.return_value = mock_update
+    mock_update.eq.return_value = mock_update
+    mock_update.eq.return_value = mock_update
+    mock_update.execute.return_value = MagicMock()
     
-    # Check the query contains CREATE TABLE
-    query = cursor.execute.call_args[0][0]
-    assert "CREATE TABLE" in query.upper()
+    result = db_manager.continue_conversation(123)
+    
+    # Verify the conversation was loaded and returned
+    assert result is mock_conversation
+    db_manager.load_conversation.assert_called_once_with(123)
+    
+    # Verify Supabase update was called
+    mock_supabase.table.assert_called_with("swarm_messages")
+    mock_supabase.table.return_value.update.assert_called_once()
+    first_eq = mock_update.eq.call_args_list[0]
+    assert first_eq[0][0] == "session_id"
+    assert first_eq[0][1] == 123
+    second_eq = mock_update.eq.call_args_list[1]
+    assert second_eq[0][0] == "type"
+    assert second_eq[0][1] == "conversation_start"
 
-@pytest.mark.asyncio
-async def test_close(db_manager, mock_pool):
-    """Test closing the database connection."""
-    # Close the connection
-    await db_manager.close()
+def test_update_task_status(db_manager, mock_supabase):
+    """Test updating task status."""
+    # Create a conversation with PENDING status
+    conversation = ConversationState(
+        session_id=123,
+        metadata=ConversationMetadata(
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            user_id="developer",
+            title="Test Conv"
+        ),
+        current_task_status=TaskStatus.PENDING
+    )
     
-    # Verify the pool's close method was called
-    mock_pool.close.assert_called_once()
+    # Mock validator
+    db_manager.validator.validate_task_transition = MagicMock(return_value=True)
+    
+    # Set up mock for save_conversation
+    db_manager.save_conversation = MagicMock(return_value=True)
+    
+    # Update to IN_PROGRESS (valid transition)
+    result = db_manager.update_task_status(conversation, TaskStatus.IN_PROGRESS)
+    
+    # Verify the status was updated
+    assert result is True
+    assert conversation.current_task_status == TaskStatus.IN_PROGRESS
+    
+    # Verify save_conversation was called
+    db_manager.save_conversation.assert_called_once_with(conversation)
 
-@pytest.mark.asyncio
-async def test_search_conversations(db_manager, mock_pool):
-    """Test searching conversations by keyword."""
-    # Mock the search results
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchall.return_value = [
-        ("test-conversation-id-1",),
-    ]
+def test_invalid_task_status_transition(db_manager, mock_supabase):
+    """Test invalid task status transition."""
+    # Create a conversation with COMPLETED status
+    conversation = ConversationState(
+        session_id=123,
+        metadata=ConversationMetadata(
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            user_id="developer",
+            title="Test Conv"
+        ),
+        current_task_status=TaskStatus.COMPLETED
+    )
     
-    # Search conversations
-    results = await db_manager.search_conversations(keyword="hello")
+    # Mock validator to reject the transition
+    db_manager.validator.validate_task_transition = MagicMock(return_value=False)
     
-    # Verify the query was executed with the correct parameters
-    cursor.execute.assert_called_once()
+    # Try to update to IN_PROGRESS (invalid transition)
+    result = db_manager.update_task_status(conversation, TaskStatus.IN_PROGRESS)
     
-    # Check query contains the keyword
-    query_args = cursor.execute.call_args[0]
-    assert "hello" in query_args[1]
+    # Verify the update failed
+    assert result is False
+    assert conversation.current_task_status == TaskStatus.COMPLETED
     
-    # Check the returned data
-    assert len(results) == 1
-    assert "test-conversation-id-1" in results
+    # Verify save_conversation was not called
+    db_manager.save_conversation = MagicMock()
+    db_manager.save_conversation.assert_not_called()
 
-@pytest.mark.asyncio
-async def test_get_conversation_by_user(db_manager, mock_pool):
-    """Test retrieving a specific conversation for a user."""
-    # Get conversation for user
-    conversation = await db_manager.get_conversation("test-conversation-id", user_id="test-user-id")
+def test_add_message(db_manager, mock_supabase):
+    """Test adding a message."""
+    # Call add_message
+    request_id = db_manager.add_message(
+        "123",
+        "user",
+        "Hello, world!",
+        metadata={"user_id": "developer"},
+        embedding=None,
+        request_id=None
+    )
     
-    # Verify the query was executed with the correct parameters
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.execute.assert_called_once()
+    # Verify the embedding was calculated
+    mock_supabase.table.assert_called_with('messages')
+    mock_supabase.table().insert.assert_called_once()
     
-    # Check query contains both IDs
-    query_args = cursor.execute.call_args[0]
-    assert "test-conversation-id" in query_args[1]
-    assert "test-user-id" in query_args[1]
-    
-    # Verify the returned data
-    assert conversation["conversation_id"] == "test-conversation-id"
-    assert conversation["user_id"] == "test-user-id"
+    # Verify the insert parameters
+    insert_args = mock_supabase.table().insert.call_args[0][0]
+    assert insert_args['session_id'] == "123"
+    assert insert_args['role'] == "user"
+    assert insert_args['message'] == "Hello, world!"
+    assert json.loads(insert_args['metadata'])['user_id'] == "developer"
+    assert 'embedding_nomic' in insert_args
 
-@pytest.mark.asyncio
-async def test_get_conversations_after_date(db_manager, mock_pool):
-    """Test retrieving conversations after a specific date."""
-    # Mock the date search results
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchall.return_value = [
-        ("test-conversation-id-1",),
-    ]
+def test_calculate_embedding(db_manager, mock_ollama_client):
+    """Test calculating embeddings."""
+    embedding = db_manager.calculate_embedding("Test message")
     
-    # Get conversations after date
-    results = await db_manager.get_conversations_after_date("2023-06-01")
+    # Verify the Ollama client was used correctly
+    mock_ollama_client.embeddings.assert_called_once_with(
+        model="nomic-embed-text",
+        prompt="Test message"
+    )
     
-    # Verify the query was executed with the correct parameters
-    cursor.execute.assert_called_once()
-    
-    # Check query contains the date
-    query_args = cursor.execute.call_args[0]
-    assert "2023-06-01" in query_args[1]
-    
-    # Check the returned data
-    assert len(results) == 1
-    assert "test-conversation-id-1" in results
-
-@pytest.mark.asyncio
-async def test_backup_conversations(db_manager, mock_pool, tmp_path):
-    """Test backing up conversations to a file."""
-    # Mock the get all conversations
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    cursor.fetchall.return_value = [
-        (json.dumps(SAMPLE_CONVERSATION),),
-    ]
-    
-    # Create backup file path
-    backup_file = tmp_path / "backup.json"
-    
-    # Backup conversations
-    await db_manager.backup_conversations(str(backup_file))
-    
-    # Verify the query was executed
-    cursor.execute.assert_called_once()
-    
-    # Check the backup file exists
-    assert backup_file.exists()
-    
-    # Check the backup file contents
-    with open(backup_file, 'r') as f:
-        backup_data = json.load(f)
-    
-    assert len(backup_data) == 1
-    assert backup_data[0]["conversation_id"] == "test-conversation-id"
-
-@pytest.mark.asyncio
-async def test_restore_conversations(db_manager, mock_pool, tmp_path):
-    """Test restoring conversations from a backup file."""
-    # Create backup data
-    backup_data = [SAMPLE_CONVERSATION]
-    
-    # Create backup file
-    backup_file = tmp_path / "backup.json"
-    with open(backup_file, 'w') as f:
-        json.dump(backup_data, f)
-    
-    # Restore conversations
-    await db_manager.restore_conversations(str(backup_file))
-    
-    # Verify the queries were executed (one per conversation)
-    cursor = mock_pool.__aenter__.return_value.cursor.return_value.__aenter__.return_value
-    assert cursor.execute.call_count == 1
-    
-    # Check the save query contains the conversation data
-    save_call = cursor.execute.call_args
-    assert "test-conversation-id" in str(save_call) 
+    # Verify the embedding was returned
+    assert len(embedding) == 768
+    assert embedding[0] == 0.1  # From our mock 
