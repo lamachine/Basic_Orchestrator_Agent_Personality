@@ -1,0 +1,25 @@
+https://developers.facebook.com/docs/graph-api/overview
+https://developers.facebook.com/docs/graph-api/get-started
+https://developers.facebook.com/docs/graph-api/guides
+https://developers.facebook.com/docs/graph-api/reference
+
+https://developers.facebook.com/sitemap-docs.xml
+
+
+
+Sitemap: https://www.youtube.com/sitemaps/sitemap.xml
+Sitemap: https://www.youtube.com/product/sitemap.xml
+
+https://developers.google.com/youtube/v3/docs
+
+
+
+
+https://learn.microsoft.com/en-us/linkedin/
+https://business.linkedin.com/sitemap
+
+
+
+
+https://developer.x.com/en.sitemap.xml
+https://developer.x.com/en/docs/x-api

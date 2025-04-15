@@ -1,23 +1,32 @@
 """Personal assistant tool implementation."""
 
 from typing import Dict, Any, Optional
+import logging
+import time
+import json
 
+# Setup logger
+logger = logging.getLogger(__name__)
 
-def personal_assistant_tool(task: Optional[str] = None) -> Dict[str, Any]:
+def personal_assistant_tool(task: Optional[str] = None, request_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Personal assistant tool for managing communications and tasks.
     
-    In a real implementation, this would call a separate agent or subgraph
-    handling emails, messages, task lists, and personal productivity.
-    
     Args:
         task: Optional task description or query
+        request_id: Optional request ID for tracking
         
     Returns:
         Dict with status and response message
     """
-    # Mock response - in a real implementation, this would process the task
-    # and return appropriate data based on actual tasks and communications
+    # Log incoming request with full content
+    logger.debug(f"personal_assistant_tool received task: {task}, request_id: {request_id}")
+    
+    # Wait 10 seconds
+    logger.debug(f"personal_assistant_tool processing request for 10 seconds")
+    time.sleep(10)
+    
+    # Mock response
     response = {
         "status": "success",
         "message": "Email sent to your mother with details for Sunday, and your to-do list has increased by 5 items. Would you like to review them?",
@@ -43,7 +52,11 @@ def personal_assistant_tool(task: Optional[str] = None) -> Dict[str, Any]:
                     "Call Dr. Smith for appointment"
                 ]
             }
-        }
+        },
+        "request_id": request_id
     }
+    
+    # Log outgoing response with full content
+    logger.debug(f"personal_assistant_tool completed with response: {json.dumps(response, indent=2)}")
     
     return response 

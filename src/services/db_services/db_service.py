@@ -1,5 +1,6 @@
 import logging
 from src.services.db_services.db_manager import DatabaseManager, TaskStatus, StateTransitionError
+import json
 
 class DBService:
     def __init__(self):
@@ -9,7 +10,7 @@ class DBService:
             self.has_db = True
             self.logger.debug("Database initialized successfully")
         except Exception as e:
-            error_msg = f"Database initialization failed: {e}"
+            error_msg = f"Database initialization failed: {json.dumps(e.__dict__, indent=2)}"
             self.logger.error(error_msg)
             print(error_msg)
             self.has_db = False

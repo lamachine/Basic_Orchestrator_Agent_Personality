@@ -27,10 +27,12 @@ from src.agents.orchestrator_tools import (
     handle_tool_calls, 
     format_tool_results, 
     format_completed_tools_prompt,
-    PENDING_TOOL_REQUESTS,
-    check_pending_tool_requests
+    PENDING_TOOL_REQUESTS
 )
 from src.graphs.orchestrator_graph import create_initial_state, StateManager
+
+# Import tool initialization
+from src.tools.initialize_tools import initialize_tool_dependencies
 
 # Load environment variables
 load_dotenv(override=True)
@@ -42,19 +44,19 @@ logger = logging.getLogger(__name__)
 config = Configuration()
 
 # Setup logging
-# try:
-#     # Initialize logging
-#     file_handler, console_handler = setup_logging(config)
-#     
-#     # Add handlers to logger
-#     logger.addHandler(file_handler)
-#     logger.addHandler(console_handler)
-#     
-#     logger.debug("Logging initialized successfully")
-# except Exception as e:
-#     print(f"Error setting up logging: {e}")
-#     # Setup basic logging as fallback
-#     logging.basicConfig(level=logging.INFO)
+try:
+    # Initialize logging
+    file_handler, console_handler = setup_logging(config)
+    
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    logger.debug("Logging initialized successfully")
+except Exception as e:
+    print(f"Error setting up logging: {e}")
+    # Setup basic logging as fallback
+    logging.basicConfig(level=logging.INFO)
 
 class LLMQueryAgent:
     def __init__(self, config: Configuration = config):
@@ -71,7 +73,7 @@ class LLMQueryAgent:
             logger.debug(f"Database initialized successfully")
         except Exception as e:
             error_msg = f"Database initialization failed: {e}"
-            logger.error(error_msg)
+            logger.critical(error_msg)
             print(error_msg)
             self.has_db = False
         
@@ -85,6 +87,12 @@ class LLMQueryAgent:
         # Initialize graph state and state manager
         self.graph_state = create_initial_state()
         self.state_manager = StateManager(self.graph_state)
+        
+        # Track requests and user inputs
+        self.pending_requests = {}
+        
+        # Initialize tool dependencies
+        self.tool_initialization = initialize_tool_dependencies(self)
         
         # Print configuration for debugging
         logger.debug(f"Initializing LLM Agent with model: {self.model}")
@@ -128,14 +136,13 @@ class LLMQueryAgent:
         """
         try:
             # Log the session ID and type for debugging
-            logger.info(f"Agent attempting to continue conversation with session ID: {session_id} (type: {type(session_id).__name__})")
-            print(f"DEBUG: Attempting to continue conversation with session ID: {session_id} (type: {type(session_id).__name__})")
+            logger.debug(f"Agent attempting to continue conversation with session ID: {session_id} (type: {type(session_id).__name__})")
             
             # Try to continue the conversation
             self.conversation_state = self.db.continue_conversation(session_id)
             
             if self.conversation_state:
-                logger.info(f"Successfully continued conversation with session ID: {session_id}")
+                logger.debug(f"Successfully continued conversation with session ID: {session_id}")
                 
                 # Initialize graph state for the continued conversation
                 self.graph_state = create_initial_state()
@@ -145,13 +152,12 @@ class LLMQueryAgent:
             else:
                 error_msg = f"Failed to continue conversation: session {session_id} not found"
                 logger.error(error_msg)
-                print(error_msg)  # Print to console for visibility
+                return False
         except Exception as e:
             error_msg = f"Failed to continue conversation: {e}"
             logger.error(error_msg)
-            print(f"DEBUG ERROR: {type(e).__name__}: {str(e)}")  # Print detailed error for debugging
-        
-        return False
+            logger.error(f"Exception type: {type(e).__name__}, details: {str(e)}")
+            return False
 
     def list_conversations(self, limit: int = 10):
         """List available conversations for the current user.
@@ -267,35 +273,23 @@ class LLMQueryAgent:
         # Get recent conversation context
         context = self.get_conversation_context()
         
-        base_prompt = f"""You are Ronan, an intelligent assistant with access to specialized tools.
-                    You can respond directly to most questions and requests, including general knowledge questions, 
-                    jokes, casual conversation, and basic assistance.
+        # Enhanced base prompt with more explicit instructions about tool usage
+        base_prompt = f"""You are a helpful AI assistant with access to specialized tools.
 
-                    ONLY use tools when you need specific information that you don't have or when the user explicitly
-                    requests something that requires one of your specialized tools. 
+IMPORTANT INSTRUCTIONS FOR TOOL USAGE:
+1. Answer questions directly when you can.
+2. Use tools ONLY when necessary for specific tasks that require them.
+3. When using a tool, use EXACTLY this format: `tool_name(task="your request")` 
+   For example: `scrape_repo(task="https://github.com/username/repo")`
+4. NEVER make up or hallucinate tool results. Wait for actual results.
+5. If you mention a tool, you MUST call it properly with the syntax above.
+6. For GitHub repositories, you MUST use the scrape_repo tool with the full URL.
 
-                    Tool usage guidelines:
-                    - personal_assistant: Use for emails, to-do lists, calendar events, scheduling, and any personal organization
-                    - valet: Use for staff management, home logistics, and internal messaging
-                    - librarian: Use for research and documentation tasks
-                    
-                    For example:
-                    - If asked for a joke, tell a joke directly
-                    - If asked for general information, answer directly
-                    - If asked about the weather, admit you don't have current weather data
-                    - If asked to send an email or check your schedule, use personal_assistant
-                    - If asked about staff or home management, use valet
-                    - If asked to research a topic, use librarian
+Conversation Context:
+{context}
 
-                    IMPORTANT: When using a tool, DO NOT fabricate a response from the tool.
-                    ONLY use the exact format shown in the examples below and wait for the system to execute the tool.
-                    DO NOT write responses as if coming from the tool - the system will provide those.
-
-                    Conversation Context:
-                    {context}
-
-                    User: {user_input}
-                    Agent:"""
+User: {user_input}
+Assistant:"""
 
         # Add tool descriptions to the prompt
         enhanced_prompt = add_tools_to_prompt(base_prompt)
@@ -303,6 +297,9 @@ class LLMQueryAgent:
         # Add previous tool results if available
         if self.last_tool_results:
             enhanced_prompt = f"{enhanced_prompt}\n\n{self.last_tool_results}"
+            
+        # Log the full prompt at debug level
+        logger.debug(f"FULL PROMPT:\n{enhanced_prompt}")
             
         return enhanced_prompt
 
@@ -312,8 +309,17 @@ class LLMQueryAgent:
             recent_messages = self.db.get_recent_messages(self.session_id)
             logger.debug(f"Retrieved {len(recent_messages)} messages for context")
             
-            # The db_manager.get_recent_messages already converts the column names to role/message
-            return "\n".join([f"{msg['role']}: {msg['message']}" for msg in recent_messages])
+            # Filter out system messages and format the conversation more cleanly
+            formatted_messages = []
+            for msg in recent_messages:
+                # Skip system messages and tool submissions
+                if msg['role'] in ['system'] or 'tool request submitted' in msg['message']:
+                    continue
+                # Clean up the role name
+                role = msg['role'].replace('orchestrator_graph.', '')
+                formatted_messages.append(f"{role}: {msg['message']}")
+            
+            return "\n".join(formatted_messages)
         except Exception as e:
             error_msg = f"Failed to get conversation context: {e}"
             logger.error(error_msg)
@@ -329,54 +335,68 @@ class LLMQueryAgent:
         }
         
         try:
-            # LLM call via Ollama API
-            logger.info(f"Payload sent to LLM (first 100 chars): {json.dumps(payload)[:100]}...")  # Log just first 100 chars
-            logger.debug(f"Querying LLM model: {self.model}")
-            
-            # Print payload for debugging - first 100 chars only
-            print(f"Payload (first 100 chars): {json.dumps(payload)[:100]}...")
-            
+            # Send the request to the LLM
             response = requests.post(self.api_url, json=payload)
             response.raise_for_status()
             response_json = response.json()
+            
+            # Extract the response text and metadata
             response_text = response_json.get('response', 'No response from LLM')
+            created_at = response_json.get('created_at', '')
+            context = response_json.get('context', [])
+            total_duration = response_json.get('total_duration', 0)
+            load_duration = response_json.get('load_duration', 0)
+            prompt_eval_count = response_json.get('prompt_eval_count', 0)
+            eval_count = response_json.get('eval_count', 0)
             
-            # Print response for debugging - first 100 chars only
-            print(f"Response (first 100 chars): {json.dumps(response_json)[:100]}...")
-            
-            logger.info(f"Response received from LLM (first 100 chars): {json.dumps(response_json)[:100]}...")  # Log just first 100 chars
-            logger.debug(f"Received response from LLM (length: {len(response_text)})")
+            # Log response details at debug level only
+            logger.debug(f"Response details:")
+            logger.debug(f"- Created at: {created_at}")
+            logger.debug(f"- Total duration: {total_duration}ns")
+            logger.debug(f"- Load duration: {load_duration}ns")
+            logger.debug(f"- Prompt eval tokens: {prompt_eval_count}")
+            logger.debug(f"- Response eval tokens: {eval_count}")
+            logger.debug(f"- Response length: {len(response_text)} characters")
             
             return response_text
         except Exception as e:
             error_msg = f"Error querying LLM: {str(e)}"
-            logger.error(error_msg)
+            logger.critical(error_msg)
             return error_msg
     
     def process_response_with_tools(self, response_text: str) -> Dict[str, Any]:
         """Process LLM response to handle any tool calls."""
         logger.debug("Processing LLM response for tool calls")
-        logger.debug(f"Response text: {response_text[:100]}...")  # Log the first 100 characters of the response
+        logger.debug(f"Response text (first 300 chars): {response_text[:300]}...")  # Log first 300 characters at DEBUG level
         
         # Check for hallucinated tool responses - patterns like "tool_name: result" or "tool(...): result"
+        # Only consider it a hallucination if it's not a proper tool call syntax
         hallucination_patterns = [
             r'`([a-zA-Z_\.]+)_tool:\s+(.*?)`',  # `tool_name_tool: result`
-            r'([a-zA-Z_]+)\s*\([^)]*\)\s*:\s+(.*)',  # tool(...): result
+            r'([a-zA-Z_]+)\s*\([^)]*\):\s+(.*)',  # tool(...): result 
             r'([a-zA-Z_]+)\s+tool\s+response:\s+(.*)',  # tool name tool response: result
             r'orchestrator_graph\.([a-zA-Z_]+)_tool:\s+(.*)'  # orchestrator_graph.tool_name_tool: result
         ]
         
-        # Check if the response contains hallucinated tool outputs
+        # First, check if there's a valid tool call pattern
+        valid_tool_pattern = r'`([a-zA-Z_]+)\s*\(\s*task\s*=\s*(?:"|\')(.*?)(?:"|\')\s*\)`'
+        has_valid_tool_call = bool(re.search(valid_tool_pattern, response_text))
+        
+        logger.debug(f"Has valid tool call pattern: {has_valid_tool_call}")
+        
+        # Only check for hallucinations if we don't have a valid tool call
         hallucinated = False
-        for pattern in hallucination_patterns:
-            if re.search(pattern, response_text, re.IGNORECASE):
-                hallucinated = True
-                logger.warning(f"Detected hallucinated tool output in response: {response_text[:100]}...")
-                break
+        if not has_valid_tool_call:
+            for pattern in hallucination_patterns:
+                if re.search(pattern, response_text, re.IGNORECASE):
+                    hallucinated = True
+                    logger.warning(f"Detected hallucinated tool output in response: {response_text[:100]}...")
+                    break
         
         if hallucinated:
             # We need to re-prompt with stronger instructions against hallucination
             # Return an empty result that will trigger the appropriate handling
+            logger.warning("Detected hallucination, will attempt re-prompting")
             return {
                 "tool_calls": [],
                 "execution_results": [],
@@ -385,10 +405,11 @@ class LLMQueryAgent:
             }
             
         # Handle any tool calls in the response
+        logger.debug("Calling handle_tool_calls to extract tool calls from response")
         processing_result = handle_tool_calls(response_text)
         
         # Log the processing result
-        logger.debug(f"Processing result: {processing_result}")
+        logger.debug(f"Processing result tool_calls: {processing_result['tool_calls']}")
         
         # Format tool results for the next prompt if there were any tool calls
         if processing_result["tool_calls"]:
@@ -398,8 +419,9 @@ class LLMQueryAgent:
             # Log tool execution
             for result in processing_result["execution_results"]:
                 tool_name = result["name"]
-                result_msg = result["result"]["message"]
-                logger.debug(f"Executed {tool_name}: {result_msg[:50]}...")
+                status = result["result"]["status"]
+                request_id = result["result"].get("request_id", "unknown")
+                logger.info(f"Tool {tool_name} request {request_id} executed with status: {status}")
         else:
             logger.debug("No tool calls found in response")
             self.last_tool_results = ""
@@ -654,14 +676,19 @@ Agent:"""
         }
         
         if processing_result["execution_results"]:
-            result["tool_requests"] = [
-                {
+            tool_requests = []
+            for r in processing_result["execution_results"]:
+                request_id = r.get("request_id", "unknown")
+                # Store the user input for each request for later automatic completion
+                self.pending_requests[request_id] = user_input
+                
+                tool_requests.append({
                     "tool": r["name"],
-                    "request_id": r.get("request_id", "unknown"),
+                    "request_id": request_id,
                     "message": r["result"]["message"]
-                }
-                for r in processing_result["execution_results"]
-            ]
+                })
+            
+            result["tool_requests"] = tool_requests
                 
         return result
 
@@ -676,7 +703,7 @@ Agent:"""
         Returns:
             Dictionary containing the LLM response
         """
-        logger.debug(f"Handling tool completion for request ID: {request_id}")
+        logger.info(f"HANDLING TOOL COMPLETION: Request ID {request_id}")
         
         # Generate a prompt with the completed tool results
         prompt = format_completed_tools_prompt(request_id, original_query)
@@ -779,6 +806,35 @@ Agent:"""
         lowercase_text = text.lower()
         return any(phrase in lowercase_text for phrase in goodbye_phrases)
 
+    def check_pending_tools(self) -> Optional[Dict[str, Any]]:
+        """Check if any pending tool requests have completed and process them."""
+        # Import the tool utilities
+        from src.agents.orchestrator_tools import PENDING_TOOL_REQUESTS
+        
+        # Run the check for completed tool requests
+        from src.agents.orchestrator_tools import check_completed_tool_requests
+        check_completed_tool_requests()
+        
+        # Check if any pending requests exist in our instance
+        for request_id, user_input in list(self.pending_requests.items()):
+            # Check if the request has been completed
+            request_info = PENDING_TOOL_REQUESTS.get(request_id, {})
+            if request_info.get('status') == 'completed':
+                # Process the completed request
+                logger.info(f"Found completed tool request: {request_id}")
+                # Remove from our pending requests
+                del self.pending_requests[request_id]
+                
+                # Return the completed request information
+                return {
+                    'request_id': request_id,
+                    'user_input': user_input,
+                    'response': request_info.get('response', {})
+                }
+        
+        # No completed requests found
+        return None
+
 def main():
     """Main function to run the LLM agent in a chat loop."""
     agent = LLMQueryAgent()
@@ -860,14 +916,12 @@ def main():
     print("  * personal_assistant: Handle emails and manage to-do lists")
     print("  * librarian: Perform research and documentation tasks")
     print("\nCommands:")
-    print("- Type 'check tools' to check if any tool requests have been completed")
     print("- Type 'rename' to change the title of the current conversation")
     print("- Type 'exit' to quit the conversation")
-    print("\nTry asking for a joke or general question first, then try asking about your schedule or email.\n")
+    print("\nTools will process asynchronously so you can continue chatting while they work.")
+    print("When a tool completes, you'll see its response automatically.")
     
-    # Keep track of pending requests
-    pending_requests = {}
-    
+    # Main chat loop
     while True:
         user_input = input("\nYou: ").strip()
         
@@ -896,89 +950,22 @@ def main():
                 print("No active conversation to rename.")
             continue  # Skip processing as a regular message
         
-        elif user_input.lower() == 'check tools':
-            # Check for completed tool requests
-            completed_requests = check_pending_tool_requests()
-            
-            if not completed_requests:
-                # Show pending requests with their elapsed time
-                pending_count = len([r for r in PENDING_TOOL_REQUESTS.values() if r["status"] == "pending"])
-                
-                if pending_count > 0:
-                    print(f"You have {pending_count} pending tool requests that are still processing.")
-                    print("Pending requests:")
-                    
-                    current_time = datetime.now()
-                    for req_id, req in PENDING_TOOL_REQUESTS.items():
-                        if req["status"] == "pending":
-                            created_time = datetime.fromisoformat(req["created_at"])
-                            elapsed_seconds = (current_time - created_time).total_seconds()
-                            tool_name = req["name"]
-                            
-                            # Calculate remaining time (assuming 10 second delay)
-                            remaining = max(0, 10 - elapsed_seconds)
-                            print(f"- {tool_name} (Request ID: {req_id}): {elapsed_seconds:.1f}s elapsed, ~{remaining:.1f}s remaining")
-                    
-                    print("\nThe requests will complete in approximately 10 seconds. Please check again soon.")
-                else:
-                    print("No pending tool requests found.")
-            else:
-                print(f"Found {len(completed_requests)} completed tool requests:")
-                
-                for i, request in enumerate(completed_requests, 1):
-                    request_id = request["request_id"]
-                    tool_name = request["name"]
-                    
-                    print(f"{i}. {tool_name} (Request ID: {request_id})")
-                
-                # Ask which request to process
-                if completed_requests:
-                    req_choice = input("Enter request number to process (or press Enter to skip): ").strip()
-                    
-                    if req_choice and req_choice.isdigit():
-                        try:
-                            idx = int(req_choice) - 1
-                            if 0 <= idx < len(completed_requests):
-                                # Process the completed request
-                                req = completed_requests[idx]
-                                request_id = req["request_id"]
-                                
-                                # Get the original query from pending_requests or use a default
-                                original_query = pending_requests.get(request_id, "your previous request")
-                                
-                                # Process the tool completion
-                                result = agent.handle_tool_completion(request_id, original_query)
-                                
-                                # Print the response
-                                print(f"\nAgent: {result['response']}")
-                                
-                                # Remove from pending requests
-                                if request_id in pending_requests:
-                                    del pending_requests[request_id]
-                        except (ValueError, IndexError):
-                            print("Invalid selection.")
-            
-            # Continue to next iteration
-            continue
-            
         # Use the full chat flow
         logger.debug("Processing user input")
         result = agent.chat(user_input)
         logger.debug("Received response from agent")
         
-        # Print the main response
-        print(f"\nAgent: {result['response']}")
-        
-        # Store any new pending requests
-        if result.get("tool_requests"):
-            for req in result["tool_requests"]:
-                request_id = req["request_id"]
-                pending_requests[request_id] = user_input
-                
-            print("\nPending Tool Requests:")
-            for req in result["tool_requests"]:
-                print(f"- {req['tool']} (Request ID: {req['request_id']})")
-            print("\nType 'check tools' to check if these requests have completed.")
+        # Print the main response without duplicate logging
+        if result.get("has_tool_results"):
+            print(f"\nAgent: {result['response']}")
+            # Print tool request information
+            if result.get("tool_requests"):
+                for req in result["tool_requests"]:
+                    request_id = req["request_id"]
+                    agent.pending_requests[request_id] = user_input
+                    print(f"- Tool request sent: {req['tool']} (request {request_id})")
+        else:
+            print(f"\nAgent: {result['response']}")
 
 if __name__ == "__main__":
     main() 

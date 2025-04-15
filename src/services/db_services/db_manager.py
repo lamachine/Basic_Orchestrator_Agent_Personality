@@ -8,6 +8,7 @@ from ollama import Client
 from pydantic import BaseModel, Field, model_validator
 import logging
 from enum import Enum
+import time
 
 # Import state management components
 from src.state.state_models import MessageRole, TaskStatus, Message
@@ -439,7 +440,7 @@ class DatabaseManager:
                 logger.debug(f"Found conversation: ID={session_id}, Name={name}, User={conversation_user_id}, Updated={updated_at}")
             
             user_filter_msg = f" for user '{user_id}'" if user_id else ""
-            logger.info(f"Retrieved {len(conversations)} conversations{user_filter_msg}")
+            logger.debug(f"Retrieved {len(conversations)} conversations{user_filter_msg}")
             return conversations
         except Exception as e:
             logger.error(f"Error retrieving conversations: {e}")
@@ -621,7 +622,7 @@ class DatabaseManager:
                 insert_data['type'] = 'conversation_start'
             
             self.supabase.table('swarm_messages').insert(insert_data).execute()
-            logger.info(f"Successfully created conversation with ID: {next_session_id}")
+            logger.debug(f"Successfully created conversation with ID: {next_session_id}")
         except Exception as e:
             logger.error(f"Error creating conversation: {str(e)}")
             self._error_count += 1
@@ -735,7 +736,7 @@ class DatabaseManager:
             self._check_rate_limit()
             
             # Debug log
-            logger.info(f"DB Manager continuing conversation with session ID: {session_id} (type: {type(session_id).__name__})")
+            logger.debug(f"DB Manager continuing conversation with session ID: {session_id} (type: {type(session_id).__name__})")
             
             # Always convert session_id to string for consistency
             session_id_str = str(session_id)
@@ -824,7 +825,7 @@ class DatabaseManager:
             # Update timestamp to mark as active
             self._update_conversation_timestamp(session_id_str)
             
-            logger.info(f"Successfully loaded conversation with session ID: {session_id_str}, found {len(messages)} messages")
+            logger.debug(f"Successfully loaded conversation with session ID: {session_id_str}, found {len(messages)} messages")
             return conversation
             
         except Exception as e:
@@ -858,7 +859,7 @@ class DatabaseManager:
                     .eq('id', message_id) \
                     .execute()
                     
-                logger.info(f"Updated timestamp for conversation {session_id}")
+                logger.debug(f"Updated timestamp for conversation {session_id}")
             else:
                 logger.warning(f"Could not find initial message for conversation {session_id}")
         except Exception as e:
@@ -884,6 +885,11 @@ class DatabaseManager:
             int: The request ID for this message or call
         """
         try:
+            # Validate message content - don't allow empty messages
+            if not message or not message.strip():
+                logger.warning(f"Attempted to add empty message to database (role: {role}, session: {session_id})")
+                return request_id or 0
+                
             self._check_rate_limit()
             
             # Calculate embedding if not provided
@@ -915,7 +921,7 @@ class DatabaseManager:
             if request_id is not None:
                 metadata["request_id"] = request_id
             
-            # Add timestamp if not present
+            # Add timestamp to metadata if not present
             current_time = datetime.now().isoformat()
             if "timestamp" not in metadata:
                 metadata["timestamp"] = current_time
@@ -942,19 +948,24 @@ class DatabaseManager:
                     target = "orchestrator_graph.llm"
                 else:
                     target = "orchestrator_graph.cli"  # Default to client
-                
+            
             # Insert message
-            self.supabase.table('swarm_messages').insert({
-                'session_id': session_id,
-                'sender': sender,
-                'target': target,
-                'content': message,
-                'metadata': json.dumps(metadata, cls=DateTimeEncoder) if metadata else None,
-                'embedding_nomic': embedding,
-                'timestamp': current_time,
-                'user_id': metadata.get('user_id'),
-                'request_id': metadata.get('request_id')
-            }).execute()
+            try:
+                self.supabase.table('swarm_messages').insert({
+                    'session_id': session_id,
+                    'sender': sender,
+                    'target': target,
+                    'content': message,
+                    'metadata': json.dumps(metadata, cls=DateTimeEncoder) if metadata else None,
+                    'embedding_nomic': embedding,
+                    'timestamp': current_time,
+                    'user_id': metadata.get('user_id'),
+                    'request_id': metadata.get('request_id')
+                }).execute()
+            except Exception as e:
+                # Log the error but don't retry - let the caller handle any database errors
+                logger.error(f"Error inserting message: {e}")
+                raise
             
             return request_id or 0  # Return request_id for tracking in calling code
         except StateError as e:
@@ -1538,7 +1549,7 @@ class DatabaseManager:
                         .eq('id', message_id) \
                         .execute()
                     
-                    logger.info(f"Successfully renamed conversation {session_id} to '{new_title}'")
+                    logger.debug(f"Successfully renamed conversation {session_id} to '{new_title}'")
                     return True
                 else:
                     logger.error(f"Cannot rename conversation {session_id}: start message not found")

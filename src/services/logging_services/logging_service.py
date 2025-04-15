@@ -24,4 +24,4 @@ class LoggingService:
         except Exception as e:
             print(f"Error setting up logging: {e}")
             # Setup basic logging as fallback
-            logging.basicConfig(level=logging.INFO) 
+            logging.basicConfig(level=logging.DEBUG) 
