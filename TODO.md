@@ -567,3 +567,33 @@ async def build_agent(ctx: Context, spec: str) -> str:
 - stdio for network communication
 
 
+==============================
+
+## Orchestrator to Agent build.
+
+---
+
+## Agent-Orchestrator Modularization Plan & Checklist
+
+### Goal
+- The orchestrator should only know about the three agents: `valet`, `librarian`, and `personal_assistant`.
+- It should not know about individual tools or their descriptions.
+- Each agent manages its own tool registry and prompt section.
+
+### Step 1: Refactor the Orchestrator to Route by Agent, Not Tool
+
+**Checklist:**
+- [ ] Create/verify agent handler modules: `agent_valet.py`, `agent_librarian.py`, `agent_personal_assistant.py` (or similar).
+- [ ] Move tool registry and prompt logic into each agent handler.
+- [ ] Refactor the orchestrator's main loop to:
+    - Only route to agents, not tools.
+    - Not include tool descriptions in its own prompt.
+- [ ] Test that a user request like "tool librarian: research X" is routed to the librarian agent, which then selects and runs the correct tool.
+
+**Once this is done:**
+- Orchestrator: Knows only about agents.
+- Each agent: Knows about its own tools and prompt logic.
+
+---
+
+Let's work through this checklist step by step!

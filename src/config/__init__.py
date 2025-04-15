@@ -11,7 +11,7 @@ class Configuration:
     """Base configuration class for the application."""
     def __init__(self, **kwargs):
         # Logging configuration with defaults
-        self.file_level = kwargs.get('file_level', os.getenv('FILE_LOG_LEVEL', 'INFO'))
+        self.file_level = kwargs.get('file_level', os.getenv('FILE_LOG_LEVEL', 'DEBUG'))
         self.console_level = kwargs.get('console_level', os.getenv('CONSOLE_LOG_LEVEL', 'INFO'))
         
         # Database configuration
