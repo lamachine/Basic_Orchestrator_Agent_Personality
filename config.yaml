@@ -1,0 +1,70 @@
+# User Configuration for Basic Orchestrator Agent Personality
+# 
+# This file contains user-editable settings for the application.
+# Edit the values below to customize the behavior of the system.
+# 
+# Note: Do not remove any sections, only modify values.
+#       Use # to add comments or disable settings.
+#
+# For more information, see the project documentation.
+#
+logging:
+  file_level: DEBUG
+  console_level: INFO
+  log_dir: ./logs
+  max_log_size_mb: 10
+  backup_count: 5
+llm:
+  provider: ollama
+  api_url: http://localhost:11434
+  default_model: llama3.1:latest
+  temperature: 0.7
+  max_tokens: 2048
+  context_window: 8192
+  models:
+    conversation:
+      model: llama3.1:latest
+      temperature: 0.7
+      max_tokens: 2048
+      system_prompt: You are a helpful assistant named Ronan.
+    coding:
+      model: codellama:latest
+      temperature: 0.2
+      max_tokens: 4096
+      system_prompt: You are an expert programming assistant.
+    reasoning:
+      model: deepseek-r1
+      temperature: 0.3
+      max_tokens: 4096
+      system_prompt: You are a logical reasoning assistant that thinks step by step.
+    embedding:
+      model: nomic-embed-text
+      dimensions: 768
+      normalize: true
+orchestrator:
+  graph_type: standard
+  max_recursion_depth: 3
+  max_pending_tasks: 10
+  task_timeout_seconds: 300
+  default_thinking_format: steps
+database:
+  provider: supabase
+  url: ''
+  anon_key: ''
+  service_role_key: ''
+agents:
+  enabled:
+  - librarian
+  - valet
+  - personal_assistant
+  librarian:
+    use_web_search: true
+    max_references: 5
+  valet:
+    check_frequency_seconds: 300
+  personal_assistant:
+    default_timezone: UTC
+general:
+  debug_mode: false
+  user_id: developer
+  session_timeout_minutes: 30

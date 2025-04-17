@@ -1,3 +1,26 @@
+import logging
+
+# Configure HTTP client logging to use file handlers and not console output
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.setLevel(logging.DEBUG)
+httpx_logger.propagate = False  # Prevent propagation to root logger/console
+
+urllib3_logger = logging.getLogger("urllib3")
+urllib3_logger.setLevel(logging.DEBUG)
+urllib3_logger.propagate = False
+
+requests_logger = logging.getLogger("requests")
+requests_logger.setLevel(logging.DEBUG)
+requests_logger.propagate = False
+
+http_client_logger = logging.getLogger("http.client")
+http_client_logger.setLevel(logging.DEBUG)
+http_client_logger.propagate = False
+
+aiohttp_logger = logging.getLogger("aiohttp")
+aiohttp_logger.setLevel(logging.DEBUG)
+aiohttp_logger.propagate = False
+
 import os
 from supabase import create_client, Client
 from datetime import datetime, timedelta
@@ -9,6 +32,8 @@ from pydantic import BaseModel, Field, model_validator
 import logging
 from enum import Enum
 import time
+import uuid
+import random
 
 # Import state management components
 from src.state.state_models import MessageRole, TaskStatus, Message
@@ -61,7 +86,7 @@ class ConversationState(BaseModel):
     """State of a conversation."""
     session_id: int
     metadata: ConversationMetadata
-    current_request_id: Optional[int] = None
+    current_request_id: Optional[str] = None
     messages: List[DBMessage] = Field(default_factory=list)
     current_task_status: TaskStatus = Field(default=TaskStatus.PENDING)
     
@@ -139,6 +164,7 @@ class DatabaseManager:
     def __init__(self):
         url: str = os.getenv("SUPABASE_URL")
         key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        
         self.supabase: Client = create_client(url, key)
         self.validator = StateValidator()
         self._last_update = datetime.now()
@@ -527,6 +553,20 @@ class DatabaseManager:
         """Get the number of errors encountered."""
         return self._error_count
 
+    def get_next_uuid(self) -> str:
+        """Generate a unique UUID string for request IDs.
+        
+        Returns:
+            str: A new UUID string
+        """
+        try:
+            return str(uuid.uuid4())
+        except Exception as e:
+            logger.error(f"Error generating UUID: {str(e)}")
+            self._error_count += 1
+            # Fallback to timestamp-based ID if UUID generation fails
+            return f"id-{int(time.time())}-{random.randint(1000, 9999)}"
+
     def get_next_id(self, column_name: str, table_name: str) -> int:
         """Fetch the next ID by incrementing the current maximum for a given column and table."""
         try:
@@ -866,7 +906,7 @@ class DatabaseManager:
             logger.error(f"Error updating conversation timestamp: {e}")
 
     def add_message(self, session_id: str, role: str, message: str, metadata: Optional[Dict[str, Any]] = None, 
-                   embedding: Optional[List[float]] = None, request_id: Optional[int] = None, 
+                   embedding: Optional[List[float]] = None, request_id: Optional[str] = None, 
                    sender: Optional[str] = None, target: Optional[str] = None) -> str:
         """Enhanced add_message with metadata support, automatic embedding, and request ID handling.
         
@@ -882,13 +922,13 @@ class DatabaseManager:
             user_id: User ID
             
         Returns:
-            int: The request ID for this message or call
+            str: The request ID for this message or call
         """
         try:
             # Validate message content - don't allow empty messages
             if not message or not message.strip():
                 logger.warning(f"Attempted to add empty message to database (role: {role}, session: {session_id})")
-                return request_id or 0
+                return request_id or ""
                 
             self._check_rate_limit()
             
@@ -915,7 +955,7 @@ class DatabaseManager:
             
             # If no request_id provided and this is a tool call, get next request_id
             if request_id is None and is_tool_call:
-                request_id = self.get_next_id('request_id', 'swarm_messages')
+                request_id = self.get_next_uuid()
             
             # Add request_id to metadata if it exists
             if request_id is not None:
@@ -967,13 +1007,13 @@ class DatabaseManager:
                 logger.error(f"Error inserting message: {e}")
                 raise
             
-            return request_id or 0  # Return request_id for tracking in calling code
+            return request_id or ""  # Return request_id for tracking in calling code
         except StateError as e:
             logger.error(f"State error adding message: {e}")
-            return request_id or 0
+            return request_id or ""
         except Exception as e:
             logger.error(f"Error adding message: {e}")
-            return request_id or 0
+            return request_id or ""
 
     def calculate_embedding(self, message: str) -> List[float]:
         """Calculate the embedding for a given message using Ollama API.

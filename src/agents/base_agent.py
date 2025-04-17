@@ -18,6 +18,12 @@ class BaseAgent:
         if api_url is None or model is None:
             raise ValueError("api_url and model must be provided to BaseAgent for LLMService.")
         self.llm = LLMService(api_url, model)
+        self._model = model  # Store model name
+
+    @property
+    def model_name(self) -> str:
+        """Get the agent's model name."""
+        return self._model
 
     def log_message(self, message: str, level: str = "info"):
         if level == "debug":

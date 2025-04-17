@@ -43,9 +43,15 @@ class Message(BaseModel):
     @classmethod
     def content_not_empty(cls, v: str) -> str:
         """Validate that message content is not empty."""
-        if not v.strip():
+        # Trim whitespace to prevent spaces-only messages
+        trimmed = v.strip() if isinstance(v, str) else ''
+        
+        # Check if the content is empty after trimming
+        if not trimmed:
             raise ValueError('Content cannot be empty')
-        return v.strip()
+            
+        # Return the trimmed content
+        return trimmed
 
     @field_validator('metadata')
     @classmethod

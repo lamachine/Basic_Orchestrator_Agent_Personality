@@ -8,7 +8,7 @@ import json
 # Setup logger
 logger = logging.getLogger(__name__)
 
-def personal_assistant_tool(task: Optional[str] = None, request_id: Optional[int] = None) -> Dict[str, Any]:
+def personal_assistant_tool(task: Optional[str] = None, request_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Personal assistant tool for managing communications and tasks.
     

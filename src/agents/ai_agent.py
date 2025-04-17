@@ -4,12 +4,15 @@ import requests
 import os
 import uuid
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 from datetime import datetime
 import re
 import time
 import sys
 import threading
+import random
+import asyncio
+from enum import Enum
 
 # Add platform-specific imports for non-blocking input
 if os.name == 'nt':  # Windows
@@ -47,25 +50,25 @@ from src.graphs.orchestrator_graph import create_initial_state, StateManager
 # Import tool initialization
 from src.tools.initialize_tools import initialize_tool_dependencies
 from src.agents.base_agent import BaseAgent
+from src.tools.tool_registry import ToolRegistry
 
 # Load environment variables
 load_dotenv(override=True)
 
-# Setup basic logging
-logger = logging.getLogger(__name__)
+# Setup basic logging using the central LoggingService
+from src.services.logging_services.logging_service import get_logger
+logger = get_logger(__name__)
 
 # Load common configuration
 config = Configuration()
 
-# Setup logging
+# Setup logging through the central service - this only needs to be done once
+# and is already handled by the LoggingService when get_logger is called
 try:
-    # Initialize logging
-    file_handler, console_handler = setup_logging(config)
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    logger.debug("Logging initialized successfully")
+    # Just log a message to indicate the agent is starting
+    logger.debug("AI Agent initialization started")
 except Exception as e:
-    print(f"Error setting up logging: {e}")
+    print(f"Error with logging: {e}")
     logging.basicConfig(level=logging.INFO)
 
 class LLMQueryAgent(BaseAgent):
@@ -139,8 +142,14 @@ class LLMQueryAgent(BaseAgent):
             bool: True if conversation was successfully continued, False otherwise
         """
         try:
+            # Make sure session_id is the correct type
+            if isinstance(session_id, str) and session_id.isdigit():
+                # Convert string to int if it's a numeric string
+                session_id = int(session_id)
+            
             logger.debug(f"Agent attempting to continue conversation with session ID: {session_id} (type: {type(session_id).__name__})")
             self.conversation_state = self.db.continue_conversation(session_id)
+            
             if self.conversation_state:
                 logger.debug(f"Successfully continued conversation with session ID: {session_id}")
                 self.graph_state = create_initial_state()
@@ -265,13 +274,12 @@ class LLMQueryAgent(BaseAgent):
 
     def generate_prompt(self, user_input: str) -> str:
         """Generate a prompt for the LLM with tool descriptions and conversation context."""
-        logger.debug(f"Generating prompt for input: {user_input[:50]}...")
+        logger.info(f"Generating prompt for input: {user_input[:50]}...")
         
         # Get recent conversation context
         context = self.get_conversation_context()
         
-        # Enhanced base prompt with more explicit instructions about tool usage
-        # but also emphasizing conversational abilities
+        # Create base prompt without tool descriptions or user input yet
         base_prompt = f"""You are a helpful AI assistant named Ronan with a friendly, conversational tone. You can directly answer questions AND you have access to specialized tools when needed.
 
 CONVERSATION INSTRUCTIONS:
@@ -281,26 +289,14 @@ CONVERSATION INSTRUCTIONS:
 
 TOOL USAGE INSTRUCTIONS:
 1. Use tools ONLY when necessary for specific tasks that require them.
-2. KEYWORD TRIGGER FORMAT: When the user's message starts with "tool, [tool_name], [task]", you MUST:
-   - Extract the tool name and task
-   - Call the specified tool using the format: `tool_name(task="task")`
-3. When using a tool, use EXACTLY this format: `tool_name(task="your request")`
-4. NEVER make up or hallucinate tool results. Wait for actual results.
-
-# AVAILABLE TOOLS
-
-## librarian
-Performs research, documentation crawling, and knowledge management.
-Example: `librarian(task="Ask for an update")`
+2. When using a tool, use EXACTLY this format: `tool_name(task="your request")`
+3. NEVER make up or hallucinate tool results. Wait for actual results.
 
 When you need to use a tool, say "I'll use the [tool name] tool to [brief description of task]" 
 followed by the tool call using the proper syntax.
 
 Conversation Context:
-{context}
-
-User: {user_input}
-Assistant:"""
+{context}"""
 
         # Add tool descriptions to the prompt
         enhanced_prompt = add_tools_to_prompt(base_prompt)
@@ -308,8 +304,11 @@ Assistant:"""
         # Add previous tool results if available
         if self.last_tool_results:
             enhanced_prompt = f"{enhanced_prompt}\n\n{self.last_tool_results}"
+        
+        # Add user input and assistant prompt at the end
+        enhanced_prompt = f"{enhanced_prompt}\n\nUser: {user_input}\nAssistant:"
             
-        # Log the full prompt at debug level
+        # Log the full prompt at info level
         logger.debug(f"FULL PROMPT:\n{enhanced_prompt}")
             
         return enhanced_prompt
@@ -361,13 +360,14 @@ Assistant:"""
             eval_count = response_json.get('eval_count', 0)
             
             # Log response details at debug level only
-            logger.debug(f"Response details:")
-            logger.debug(f"- Created at: {created_at}")
-            logger.debug(f"- Total duration: {total_duration}ns")
-            logger.debug(f"- Load duration: {load_duration}ns")
-            logger.debug(f"- Prompt eval tokens: {prompt_eval_count}")
-            logger.debug(f"- Response eval tokens: {eval_count}")
-            logger.debug(f"- Response length: {len(response_text)} characters")
+            logger.info(f"Response details:")
+            logger.info(f"- Created at: {created_at}")
+            logger.info(f"- Total duration: {total_duration}ns")
+            logger.info(f"- Load duration: {load_duration}ns")
+            logger.info(f"- Prompt eval tokens: {prompt_eval_count}")
+            logger.info(f"- Response eval tokens: {eval_count}")
+            logger.info(f"- Response length: {len(response_text)} characters")
+            logger.info(f"RESPONSE TEXT:\n{response_text}")
             
             return response_text
         except Exception as e:
@@ -462,38 +462,67 @@ Assistant:"""
         
         logger.debug(f"Stored {len(execution_results)} tool requests in database")
 
-    def process_llm_response(self, response_text: str, user_input: str) -> str:
+    def process_llm_response(self, response_text: str, user_input: str) -> Dict[str, Any]:
         """Process the LLM response for tool calls and handle results."""
         self.log_message(f"Processing LLM response for tool calls", level="debug")
         self.log_message(f"Response text (first 300 chars): {response_text[:300]}", level="debug")
         
-        # Check if this is a direct request for tool usage
-        is_direct_tool_request = user_input.strip().lower().startswith("tool,")
-        
-        # For direct tool requests or if response contains valid tool call pattern
+        # Check for valid tool call pattern in response
         # Look for both the explicit backtick format and the descriptive format
         has_tool_pattern = bool(re.search(r"(^|\n)`\w+\(task=\"[^\"]+\"\)`", response_text) or 
                                re.search(r"I'll use the (\w+) tool to", response_text))
         self.log_message(f"Has valid tool call pattern: {has_tool_pattern}", level="debug")
         
-        # Only extract and execute tool calls if it's a direct tool request or the response
-        # has a valid tool call pattern
-        if is_direct_tool_request or has_tool_pattern:
+        # Initialize result structure
+        result = {
+            "response": response_text,
+            "execution_results": [],
+            "tool_requests": []  # Ensure this is always initialized
+        }
+        
+        # Only extract and execute tool calls if the response has a valid tool call pattern
+        if has_tool_pattern:
             # Extract and execute tool calls
             self.log_message("Calling handle_tool_calls to extract tool calls from response", level="debug")
             processing_result = handle_tool_calls(response_text, user_input)
+            
+            # Add the execution results to our result
+            result["execution_results"] = processing_result.get("execution_results", [])
             
             if processing_result["tool_calls"]:
                 self.log_message(f"Processing result tool_calls: {processing_result['tool_calls']}", level="debug")
                 self.log_message(f"Found {len(processing_result['tool_calls'])} tool calls in response", level="debug")
                 
+                # Create a list to store tool requests for tracking
+                tool_requests = []
+                
                 # Log tool execution results
-                for result in processing_result["execution_results"]:
-                    status = result["result"].get("status", "unknown")
+                for exec_result in processing_result["execution_results"]:
+                    status = exec_result["result"].get("status", "unknown")
+                    request_id = exec_result["result"].get("request_id", "unknown")
+                    tool_name = exec_result.get("name", "unknown")
+                    
                     self.log_message(
-                        f"Tool {result['name']} request {result['request_id']} executed with status: {status}",
-                        level="info"
+                        f"Tool {tool_name} request {request_id} executed with status: {status}",
+                        level="debug"
                     )
+                    
+                    # Add to tool_requests list for tracking regardless of status
+                    tool_requests.append({
+                        "tool": tool_name,
+                        "request_id": request_id,
+                        "status": status
+                    })
+                    
+                    # Track pending request for future checking
+                    if request_id and request_id != "unknown":
+                        self.log_message(f"TRACKING: Adding pending request {request_id} for {tool_name} to tracking", level="debug")
+                        # Store the original user input that triggered this tool request
+                        self.pending_requests[request_id] = user_input
+                        self.log_message(f"TRACKING: Current pending_requests keys: {list(self.pending_requests.keys())}", level="debug")
+                
+                # Add the tool requests to the result for the CLI to display
+                result["tool_requests"] = tool_requests
                 
                 # Store tool requests in database
                 try:
@@ -504,83 +533,38 @@ Assistant:"""
                 
                 # Return acknowledgment message
                 self.log_message("Tools were used - returning acknowledgment message", level="debug")
-                return "I've processed your request and started the tool. Please wait for results to appear automatically..."
+                result["response"] = "I've processed your request and started the tool. Please wait for results to appear automatically..."
         
         # For regular conversational responses with no tool calls
-        if not is_direct_tool_request and not has_tool_pattern:
+        if not has_tool_pattern:
             self.log_message("No tool calls found - returning original response", level="debug")
-        else:
-            self.log_message("No tool calls found in response", level="debug")
-            
-        return response_text
-
-    def chat(self, user_input: str, request_id: Optional[str] = None) -> Dict[str, str]:
-        """
-        Process a chat message from the user and return a response.
         
-        Args:
-            user_input: The user's message
-            request_id: Optional request ID for tracking
-            
-        Returns:
-            Dict containing the response text and status
-        """
-        try:
-            # Check if this is a direct tool request
-            is_direct_tool_request = user_input.strip().lower().startswith("tool,")
-            
-            # Get initial response from LLM
-            initial_response_text = self.get_llm_response(user_input)
-            
-            # For direct tool requests, force tool processing
-            if is_direct_tool_request:
-                self.log_message(f"Direct tool request detected: {user_input[:50]}...", level="debug")
-                response_text = self.process_llm_response(initial_response_text, user_input)
-                
-                # Add tool tracking for direct tool requests
-                if user_input.strip().lower().startswith("tool,"):
-                    # Extract tool name from input
-                    parts = user_input.split(",", 2)
-                    if len(parts) >= 3:
-                        tool_name = parts[1].strip()
-                        # Log that we're tracking this tool request
-                        self.log_message(f"Tracking tool request for {tool_name}", level="debug")
-                        
-                        # Check for any new tool requests in the PENDING_TOOL_REQUESTS dictionary
-                        for req_id, req_info in PENDING_TOOL_REQUESTS.items():
-                            # Find the most recent request ID that matches our tool
-                            if req_info.get("status") == "pending" and not req_id in self.pending_requests:
-                                self.log_message(f"Adding pending request {req_id} to tracking", level="debug")
-                                # Store the original user input with the request ID
-                                self.pending_requests[req_id] = user_input
-                                break
-            else:
-                # For conversational messages, check if the response tries to use a tool
-                has_tool_pattern = bool(re.search(r"(^|\n)`\w+\(task=\"[^\"]+\"\)`", initial_response_text) or 
-                                      re.search(r"I'll use the (\w+) tool to", initial_response_text))
-                
-                if has_tool_pattern:
-                    # Process the response for tool calls
-                    self.log_message(f"Tool pattern detected in response, processing", level="debug")
-                    response_text = self.process_llm_response(initial_response_text, user_input)
-                else:
-                    # For purely conversational responses, just return the LLM's response directly
-                    self.log_message(f"Conversational response with no tool pattern", level="debug")
-                    response_text = initial_response_text
-            
-            # Return successful response
-            return {
-                "status": "success",
-                "response": response_text
+        return result
+
+    def chat(self, user_input: str, request_id: Optional[str] = None) -> Dict[str, Any]:
+        """Process user input and return AI response with metadata."""
+        # Check if this is a direct tool request
+        is_direct_tool_request = user_input.strip().lower().startswith("tool,")
+        if is_direct_tool_request:
+            self.log_message(f"Detected direct tool request: {user_input}", level="debug")
+        
+        # Get response from LLM
+        response_text = self.get_llm_response(user_input)
+        
+        # Process the response for any tool calls and execute them
+        processing_result = self.process_llm_response(response_text, user_input)
+        
+        # Extract metadata and return
+        return {
+            "response": processing_result["response"],
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "request_id": request_id or str(uuid.uuid4()),
+                "model": self.model_name,
+                "tool_calls": len(processing_result.get("execution_results", [])),
+                "tools_used": [exec_result.get("name") for exec_result in processing_result.get("execution_results", [])]
             }
-            
-        except Exception as e:
-            error_msg = f"Error processing chat message: {str(e)}"
-            logger.error(error_msg)
-            return {
-                "status": "error", 
-                "response": error_msg
-            }
+        }
 
     def handle_tool_completion(self, request_id: str, original_query: str) -> Dict[str, str]:
         """
@@ -597,11 +581,11 @@ Assistant:"""
         
         # Generate a prompt with the completed tool results
         prompt = format_completed_tools_prompt(request_id, original_query)
-        logger.debug(f"Generated tool completion prompt: {prompt[:100]}...")
+        logger.info(f"Generated tool completion prompt: {prompt[:100]}...")
         
         # Query the LLM with the tool results
         response_text = self.query_llm(prompt)
-        logger.debug(f"Generated LLM response: {response_text[:100]}...")
+        logger.info(f"Generated LLM response: {response_text[:100]}...")
         
         # Store the tool completion message if DB available
         try:
@@ -705,48 +689,154 @@ Assistant:"""
         lowercase_text = text.lower()
         return any(phrase in lowercase_text for phrase in goodbye_phrases)
 
-    def check_pending_tools(self) -> Optional[Dict[str, Any]]:
-        """Check if any pending tool requests have completed and process them."""
-        # Log check time for timeline tracking
-        check_time = datetime.now()
-        logger.debug(f"[{check_time.isoformat()}] Checking for completed tool requests...")
+    def check_pending_tools(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        Check for completed tool requests and return the first one found.
         
-        # Run the check for completed tool requests
-        completed = check_completed_tool_requests()
-        if completed:
-            logger.info(f"[{check_time.isoformat()}] Found {len(completed)} completed requests from check_completed_tool_requests")
+        Returns:
+            List of completed tool details if found, None otherwise
+        """
+        found_completed_tool = None
         
-        # Log all pending requests for debugging
-        logger.debug(f"[{check_time.isoformat()}] Current pending requests in agent: {list(self.pending_requests.keys())}")
-        logger.debug(f"[{check_time.isoformat()}] All pending tool requests: {list(PENDING_TOOL_REQUESTS.keys())}")
-        
-        # Check if any pending requests exist in our instance
-        for request_id, user_input in list(self.pending_requests.items()):
-            logger.debug(f"[{check_time.isoformat()}] Checking pending request: {request_id}")
+        try:
+            # First, check the global PENDING_TOOL_REQUESTS for any completed tools
+            logger.debug(f"TRACKING: Checking for completed tools in PENDING_TOOL_REQUESTS. Keys: {list(PENDING_TOOL_REQUESTS.keys())}")
+            logger.debug(f"TRACKING: Current agent.pending_requests keys: {list(self.pending_requests.keys())}")
             
-            # Check if the request has been completed
-            request_info = PENDING_TOOL_REQUESTS.get(request_id, {})
-            logger.debug(f"[{check_time.isoformat()}] Request info for {request_id}: status={request_info.get('status', 'unknown')}")
-            
-            # Check for both 'completed' and 'success' status
-            if request_info.get('status') in ['completed', 'success', 'error']:
-                # Process the completed request
-                logger.info(f"[{check_time.isoformat()}] Found completed tool request: {request_id} with status: {request_info.get('status')}")
-                # Remove from our pending requests
-                del self.pending_requests[request_id]
+            for request_id, tool_data in list(PENDING_TOOL_REQUESTS.items()):
+                # Skip tools that don't have a status or aren't completed/error
+                if "status" not in tool_data or tool_data.get("status") not in ["completed", "error"]:
+                    continue
+                    
+                logger.debug(f"TRACKING: Found tool with status {tool_data.get('status')} for request_id: {request_id}")
                 
-                # Return the completed request information
-                return {
-                    'request_id': request_id,
-                    'user_input': user_input,
-                    'response': request_info
+                # Skip if this request has already been processed by the agent
+                if tool_data.get("processed_by_agent", False):
+                    logger.debug(f"Skipping already processed tool request {request_id}")
+                    continue
+                    
+                logger.debug(f"Found completed tool with request_id: {request_id}")
+                
+                # Get the original user query that triggered this tool
+                user_input = self.pending_requests.get(request_id, "")
+                if not user_input:
+                    logger.debug(f"TRACKING: No user_input found in pending_requests for {request_id}")
+                
+                # Remove from pending requests
+                if request_id in self.pending_requests:
+                    del self.pending_requests[request_id]
+                
+                # Create result with response
+                response = tool_data.get("response", {})
+                
+                # Store the tool completion in the database
+                tool_name = tool_data.get("name", "unknown")
+                
+                # Prepare tool response content
+                if isinstance(response, dict):
+                    response_message = response.get("message", "Tool execution completed.")
+                else:
+                    response_message = str(response)
+                
+                # Create metadata for database storage
+                tool_metadata = {
+                    "type": "tool_response", 
+                    "tool": tool_name,
+                    "request_id": request_id,
+                    "status": tool_data.get("status", "completed"),
+                    "timestamp": datetime.now().isoformat(),
+                    "session": str(self.session_id),
+                    "user_id": self.user_id,
+                    "storage_status": "verified"
                 }
-            else:
-                logger.debug(f"[{check_time.isoformat()}] Request {request_id} not completed yet, status: {request_info.get('status', 'unknown')}")
+                
+                # Store in database
+                if self.has_db and self.session_id:
+                    try:
+                        # Define sender and target
+                        tool_sender = f"orchestrator_graph.{tool_name}_tool"
+                        tool_target = "orchestrator_graph.llm"
+                        
+                        # Add to database
+                        self.db.add_message(
+                            self.session_id, 
+                            "tool", 
+                            response_message, 
+                            metadata=tool_metadata,
+                            sender=tool_sender,
+                            target=tool_target
+                        )
+                        logger.debug(f"Stored tool completion in database for request_id: {request_id}")
+                    except Exception as db_error:
+                        logger.error(f"Failed to store tool completion in database: {db_error}")
+                        tool_metadata["storage_status"] = "not_verified"
+                
+                # Mark as processed by agent to avoid duplicates
+                PENDING_TOOL_REQUESTS[request_id]["processed_by_agent"] = True
+                
+                # Format completed tool results for return
+                found_completed_tool = {
+                    "request_id": request_id,
+                    "user_input": user_input,
+                    "response": response,
+                    "tool_data": tool_data
+                }
+                
+                # Return the first completed tool we find (we can only process one at a time in the CLI)
+                break
+                
+            # If we didn't find any completed tools in PENDING_TOOL_REQUESTS,
+            # check other sources (for compatibility with different tool implementations)
+            check_completed_tool_requests()
+            
+            # Return result
+            if found_completed_tool:
+                logger.debug(f"TRACKING: Returning completed tool list with request_id: {found_completed_tool['request_id']}")
+                return [found_completed_tool]  # Return as a list
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error checking for completed tools: {e}")
+            return None
+
+    async def generate_response(self, prompt: str, tool_completion_id: Optional[str] = None) -> str:
+        """Generate a response using the LLM with appropriate prompting.
         
-        # No completed requests found
-        logger.debug(f"[{check_time.isoformat()}] No completed tool requests found")
-        return None
+        Args:
+            prompt: The user prompt or system instruction to respond to
+            tool_completion_id: Optional ID of a completed tool request to process
+            
+        Returns:
+            str: The generated response
+        """
+        try:
+            # Get the LLM service
+            llm_service = await self.get_llm_service()
+            
+            # Log the request being sent to the LLM
+            logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
+            
+            # Get the full system prompt with tools
+            full_prompt = prompt
+            if hasattr(self, 'add_tools_to_prompt') and callable(self.add_tools_to_prompt):
+                # Add tool descriptions if this agent has tools
+                full_prompt = self.add_tools_to_prompt(prompt)
+            
+            # Generate the response
+            response_text = await llm_service.generate_text(full_prompt)
+            
+            # If we're processing a tool completion, mark it as fully processed
+            if tool_completion_id:
+                if tool_completion_id in PENDING_TOOL_REQUESTS:
+                    # Mark as fully processed by the LLM so it can be immediately removed
+                    PENDING_TOOL_REQUESTS[tool_completion_id]["processed_by_llm"] = True
+                    logger.debug(f"Marked tool request {tool_completion_id} as fully processed by the LLM")
+            
+            return response_text
+            
+        except Exception as e:
+            logger.error(f"Error generating response: {e}")
+            return f"I encountered an error while generating a response: {str(e)}"
 
 def process_completed_tool_request(request):
     """
@@ -769,18 +859,28 @@ def process_completed_tool_request(request):
     
     # Try to get the message from various possible locations
     message = None
+    logger.debug(f"Looking for message in tool response. Keys: {list(tool_details.keys())}")
+    
     if 'message' in tool_details:
         message = tool_details['message']
+        logger.debug(f"Found message directly in response: {message[:100]}")
     elif 'response' in tool_details and isinstance(tool_details['response'], dict):
-        message = tool_details['response'].get('message')
+        response_obj = tool_details['response']
+        logger.debug(f"Looking in nested response object. Keys: {list(response_obj.keys())}")
+        if 'message' in response_obj:
+            message = response_obj['message']
+            logger.debug(f"Found message in nested response: {message[:100]}")
     elif isinstance(tool_details, dict) and 'result' in tool_details:
         result = tool_details['result']
+        logger.debug(f"Looking in result object. Keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
         if isinstance(result, dict) and 'message' in result:
             message = result['message']
+            logger.debug(f"Found message in result object: {message[:100]}")
     
     # Fallback to a generic message if we couldn't find one
     if not message:
         message = f"Request {request_id} completed with status: {tool_details.get('status', 'unknown')}"
+        logger.warning(f"Could not find message in response. Using fallback message: {message}")
     
     # Add the tool name to the request for reference in the caller
     request['tool_name'] = tool_name

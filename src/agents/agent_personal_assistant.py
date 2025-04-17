@@ -26,5 +26,5 @@ class PersonalAssistantAgent:
 
     def handle_request(self, user_input: str) -> str:
         """Process a user request and route to the personal assistant tool if appropriate."""
-        logger.info(f"Handling personal assistant request: {user_input}")
+        logger.debug(f"Handling personal assistant request: {user_input}")
         return str(personal_assistant_tool(task=user_input)) 

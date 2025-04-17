@@ -10,12 +10,21 @@ import sys
 import time
 import threading
 import os
+import uuid
 
-# Setup logging
-logger = logging.getLogger(__name__)
+# Setup logging using the central LoggingService
+from src.services.logging_services.logging_service import get_logger
+logger = get_logger(__name__)
 
-# Track tool requests
-PENDING_TOOL_REQUESTS = {}
+# Centralized tool request tracking system
+TOOL_REQUESTS = {
+    "pending": {},  # All pending requests regardless of tool type
+    "completed": {},  # Completed requests ready for processing
+    "failed": {}  # Failed requests with error information
+}
+
+# For backward compatibility - points to the same data structure
+PENDING_TOOL_REQUESTS = TOOL_REQUESTS["pending"]
 
 # Define tool schemas and descriptions
 TOOL_DEFINITIONS = {
@@ -91,23 +100,15 @@ from src.tools.librarian import librarian_tool
 # from src.tools.scrape_docs_tool import PENDING_SCRAPE_DOCS_REQUESTS
 # from src.tools.vectorize_and_store_tool import PENDING_VECTORIZE_REQUESTS
 
-def get_next_request_id() -> int:
+def get_next_request_id() -> str:
     """
-    Get the next request ID from the database.
-    Will raise an exception if database access fails.
+    Generate a unique request ID.
     
     Returns:
-        int: The next request ID
-        
-    Raises:
-        Exception: If database access fails
+        str: A unique request ID
     """
-    # Dynamically import the database manager to avoid circular imports
-    db_module = importlib.import_module("src.services.db_services.db_manager")
-    db_manager = db_module.DatabaseManager()
-    
-    # Get the next ID from the database
-    return db_manager.get_next_id('request_id', 'swarm_messages')
+    # Use UUID for unique ID generation
+    return str(uuid.uuid4())
 
 def add_tools_to_prompt(prompt: str) -> str:
     """Add tool descriptions to the prompt."""
@@ -127,22 +128,17 @@ def add_tools_to_prompt(prompt: str) -> str:
             tools_desc += f"- `{tool_name}(task=\"{example}\")`\n"
         tools_desc += "\n"
     
-    tools_desc += "# HOW TO USE TOOLS\n"
-    tools_desc += "1. For most questions, just answer directly without using tools.\n"
-    tools_desc += "2. Use tools ONLY when the user's request specifically requires one.\n"
-    tools_desc += "3. To use a tool, write in EXACTLY this format: `tool_name(task=\"your request\")`\n"
-    tools_desc += "4. After using a tool, wait for its actual response - never make up tool results.\n"
+    # We don't need to repeat the HOW TO USE TOOLS section since it's already in the base prompt
     
     return prompt + tools_desc
 
 def handle_tool_calls(response_text: str, user_input: Optional[str] = None) -> Dict[str, Any]:
     """
     Parse tool calls from response text and execute them.
-    Also checks user input for direct tool calls using keyword format.
     
     Args:
         response_text: The text to parse for tool calls
-        user_input: Optional original user input to check for keyword format
+        user_input: Optional original user input (not used directly now that the direct tool path is removed)
         
     Returns:
         Dict containing tool calls and execution results
@@ -151,62 +147,7 @@ def handle_tool_calls(response_text: str, user_input: Optional[str] = None) -> D
     tool_calls = []
     execution_results = []
     
-    # First check user input for keyword format: "tool, name, message"
-    if user_input:
-        keyword_match = re.match(r'^tool,\s*(\w+),\s*(.+)$', user_input.strip())
-        if keyword_match:
-            logger.info("Found keyword format tool call in user input")
-            tool_name = keyword_match.group(1).strip().lower()
-            message = keyword_match.group(2).strip()
-            logger.debug(f"Parsed tool name: {tool_name}, message: {message}")
-            
-            # Validate tool exists before proceeding
-            if tool_name not in TOOL_DEFINITIONS:
-                error_msg = f"Unknown tool '{tool_name}'. Available tools: {list(TOOL_DEFINITIONS.keys())}"
-                logger.error(error_msg)
-                return {
-                    "tool_calls": [],
-                    "execution_results": [{
-                        "name": tool_name,
-                        "args": {"task": message},
-                        "result": {"status": "error", "message": error_msg},
-                        "request_id": None
-                    }]
-                }
-            
-            # Generate a unique request ID
-            request_id = len(PENDING_TOOL_REQUESTS) + 1
-            logger.debug(f"Generated request_id: {request_id}")
-            
-            # Add to tool calls
-            tool_calls.append({
-                "name": tool_name,
-                "args": {"task": message}
-            })
-            
-            # Execute the tool
-            logger.info(f"Executing tool '{tool_name}' with message: {message}")
-            result = execute_tool(
-                tool_name=tool_name,
-                args={"task": message},
-                request_id=request_id
-            )
-            logger.debug(f"Tool execution result: {result}")
-            
-            # Add to execution results
-            execution_results.append({
-                "name": tool_name,
-                "args": {"task": message},
-                "result": result,
-                "request_id": request_id
-            })
-            
-            return {
-                "tool_calls": tool_calls,
-                "execution_results": execution_results
-            }
-    
-    # Otherwise look for standard tool call format in LLM response
+    # Look for standard tool call format in LLM response
     # Look for tool calls in the format: "I'll use the [tool] tool to [task]"
     logger.debug("Looking for standard format tool calls in LLM response")
     tool_matches = re.finditer(
@@ -239,7 +180,7 @@ def handle_tool_calls(response_text: str, user_input: Optional[str] = None) -> D
     
     # Execute each tool call
     for i, call in enumerate(tool_calls):
-        request_id = len(PENDING_TOOL_REQUESTS) + i + 1
+        request_id = get_next_request_id()
         logger.info(f"Executing tool '{call['name']}' with task: {call['args']['task']}")
         result = execute_tool(
             tool_name=call["name"],
@@ -262,7 +203,7 @@ def handle_tool_calls(response_text: str, user_input: Optional[str] = None) -> D
         "execution_results": execution_results
     }
 
-def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[int] = None) -> Dict[str, Any]:
+def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Execute a tool call and return the result.
     
@@ -302,6 +243,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[int]
     
     # Store initial request status
     if request_id is not None:
+        logger.debug(f"TRACKING: Storing request {request_id} in PENDING_TOOL_REQUESTS")
         PENDING_TOOL_REQUESTS[request_id] = {
             "name": tool_name,
             "args": args,
@@ -317,6 +259,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[int]
     if request_id is not None:
         PENDING_TOOL_REQUESTS[request_id]["status"] = "in_progress"
         PENDING_TOOL_REQUESTS[request_id]["execution_started_at"] = datetime.now().isoformat()
+        logger.debug(f"TRACKING: Updated request {request_id} status to in_progress")
     
     try:
         # First check if it's an MCP tool
@@ -515,100 +458,79 @@ Be direct and to the point.
 
 Agent:"""
 
+    # Mark the request as processed to prevent it being found repeatedly in check_completed_tool_requests
+    PENDING_TOOL_REQUESTS[request_id]["processed_by_agent"] = True
+    logger.debug(f"[{datetime.now().isoformat()}] Marked request {request_id} as processed after generating prompt")
+
     return prompt
 
 def check_completed_tool_requests():
-    """Check for completed tool requests and return their results."""
-    check_time = datetime.now()
-    logger.debug(f"[{check_time.isoformat()}] Checking for completed tool requests")
-    
+    """
+    Check all known sources for completed tool requests and update the centralized tracking system.
+    """
+    logger.debug("Checking for completed tool requests")
     completed_requests = {}
     
-    # Check PENDING_TOOL_REQUESTS for completed tasks
-    for request_id, response in list(PENDING_TOOL_REQUESTS.items()):
-        status = response.get("status")
-        logger.debug(f"[{check_time.isoformat()}] Request {request_id} has status: {status}")
-        
-        if status in ["success", "error"]:
-            logger.debug(f"[{check_time.isoformat()}] Found completed request: {request_id} with status: {status}")
-            logger.info(f"[{check_time.isoformat()}] Found completed request: {request_id}")
-            
-            # Update status to 'completed' to signal to the agent that processing is done
-            response["status"] = "completed"
-            response["marked_completed_at"] = check_time.isoformat()
-            PENDING_TOOL_REQUESTS[request_id] = response
-            logger.debug(f"[{check_time.isoformat()}] Updated request {request_id} status to 'completed'")
-            
-            # Add to completed requests
-            completed_requests[request_id] = response
+    # Check for completed MCP tool requests if available
+    try:
+        if 'check_completed_mcp_requests' in globals():
+            mcp_completed = check_completed_mcp_requests()
+            if mcp_completed:
+                # Add MCP completed requests to the central tracking system
+                for request_id, result in mcp_completed.items():
+                    if request_id not in TOOL_REQUESTS["completed"] and request_id in TOOL_REQUESTS["pending"]:
+                        # Mark as completed
+                        TOOL_REQUESTS["completed"][request_id] = {
+                            **TOOL_REQUESTS["pending"][request_id],
+                            "response": result,
+                            "completed_at": datetime.now().isoformat()
+                        }
+                        # Add to results
+                        completed_requests[request_id] = TOOL_REQUESTS["completed"][request_id]
+                        # Remove from pending
+                        del TOOL_REQUESTS["pending"][request_id]
+    except Exception as e:
+        logger.error(f"Error checking MCP tool requests: {e}")
     
-    # Check MCP tool requests if available
-    if "check_completed_mcp_requests" in globals():
-        mcp_completed = check_completed_mcp_requests()
-        if mcp_completed:
-            completed_requests.update(mcp_completed)
+    # Check any other module-specific pending request trackers
+    # For now, this will capture those imported at the top level that might have been missed
+    # In the future, all tools should use the central TOOL_REQUESTS system
     
     if completed_requests:
-        logger.info(f"[{check_time.isoformat()}] Returning {len(completed_requests)} completed requests")
-        
-    return completed_requests if completed_requests else None
+        logger.info(f"Found {len(completed_requests)} newly completed tool requests")
+        return completed_requests
+    
+    return None
 
 def start_tool_checker():
     """Start a background thread to check for completed tool requests."""
+    
     def check_loop():
         # Track when we last checked each module to avoid too frequent logging
-        last_checked = {}
-        check_interval = 10  # Log availability every 10 seconds at most
-        check_count = 0
+        last_check_time = datetime.now()
         
         while True:
-            # Get current time for this check
-            check_time = datetime.now()
-            check_count += 1
-            
-            # Always log every 10th check at INFO level
-            if check_count % 10 == 0:
-                logger.debug(f"[{check_time.isoformat()}] Running check #{check_count} for completed tool requests")
-            else:
-                logger.debug(f"[{check_time.isoformat()}] Running check #{check_count} for completed tool requests")
-            
-            # Record current time for interval tracking
-            now = time.time()
-            
-            # Only log availability at INFO level occasionally
-            should_log = False
-            if 'last_overall_log' not in last_checked or now - last_checked.get('last_overall_log', 0) > check_interval:
-                should_log = True
-                last_checked['last_overall_log'] = now
-            
-            # For each important module, set its logging flag based on check interval
-            for module in ['scrape_repo', 'scrape_docs', 'vectorize', 'librarian', 'mcp']:
-                if module not in last_checked or now - last_checked.get(module, 0) > check_interval:
-                    # This will cause the module to log its availability this cycle
-                    setattr(check_completed_tool_requests, f"logged_{module}", False)
-                    last_checked[module] = now
-
-            # Temporarily set the logger level higher for the check to reduce noise
-            original_level = logger.level
-            if not should_log:
-                logger.setLevel(logging.WARNING)  # Suppress INFO logs during most checks
-                
             try:
-                completed = check_completed_tool_requests()
-                if completed:
-                    logger.info(f"[{check_time.isoformat()}] Found {len(completed)} completed requests in check #{check_count}")
-            finally:
-                # Restore original level
-                logger.setLevel(original_level)
-            
-            # Sleep for a short time between checks (0.5 second)
-            time.sleep(0.5)
-            
-    # Create thread with a meaningful name for easier debugging
-    checker_thread = threading.Thread(target=check_loop, name="ToolCompletionChecker")
-    checker_thread.daemon = True
+                # Only log every 60 seconds to avoid spamming logs
+                now = datetime.now()
+                if (now - last_check_time).total_seconds() > 60:
+                    logger.debug("Tool checker thread running")
+                    last_check_time = now
+                
+                # Check for completed tool requests
+                check_completed_tool_requests()
+                
+                # Sleep to avoid consuming too much CPU
+                time.sleep(2)
+            except Exception as e:
+                logger.error(f"Error in tool checker thread: {e}")
+                # Sleep a bit longer on error
+                time.sleep(5)
+    
+    # Start the thread
+    checker_thread = threading.Thread(target=check_loop, daemon=True)
     checker_thread.start()
-    logger.info(f"[{datetime.now().isoformat()}] Started background thread to check for completed tool requests")
+    logger.debug("Started tool checker thread")
 
 # Start the checker thread when the module is imported
-start_tool_checker() 
+start_tool_checker()

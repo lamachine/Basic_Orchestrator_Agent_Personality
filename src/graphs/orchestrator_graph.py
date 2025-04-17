@@ -111,3 +111,36 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+async def process_completed_tool(self, conversation: ConversationState, tool_completion_id: str, request_info: Dict[str, Any]) -> ConversationState:
+    """Process a completed tool request and generate a response."""
+    # Extract the tool name and user input
+    tool_name = request_info.get("name", "unknown")
+    
+    # Get the original user input that triggered this tool
+    user_message = None
+    for message in reversed(conversation.messages):
+        if message.role == MessageRole.USER:
+            user_message = message.content
+            break
+    
+    if not user_message:
+        user_message = "unknown query"  # Fallback
+    
+    # Format a prompt for the completed tool
+    prompt = format_completed_tools_prompt(tool_completion_id, user_message)
+    
+    # Generate a response using LLM
+    logger.debug(f"Generating response for completed tool {tool_name}")
+    llm_response = await self.llm_agent.generate_response(prompt, tool_completion_id=tool_completion_id)
+    
+    # Add to conversation state
+    completed_message = f"{llm_response}"
+    
+    # Create the assistant message
+    conversation.add_message(MessageRole.ASSISTANT, completed_message)
+    
+    # Update task status
+    conversation.current_task_status = TaskStatus.COMPLETED
+    
+    return conversation

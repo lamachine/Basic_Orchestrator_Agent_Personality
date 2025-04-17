@@ -26,6 +26,7 @@ class ValetAgent:
 
     def handle_request(self, user_input: str) -> str:
         """Process a user request and route to the valet tool if appropriate."""
-        logger.info(f"Handling valet request: {user_input}")
+        # Log the request
+        logger.debug(f"Handling valet request: {user_input}")
         # For now, just call the valet tool directly
         return str(valet_tool(task=user_input)) 
