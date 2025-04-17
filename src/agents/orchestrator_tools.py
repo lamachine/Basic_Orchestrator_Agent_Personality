@@ -19,50 +19,51 @@ PENDING_TOOL_REQUESTS = {}
 
 # Define tool schemas and descriptions
 TOOL_DEFINITIONS = {
-    # Original tools are commented out but preserved in the code
-    # "valet": {
-    #     "description": "Manages household staff, daily schedule, and personal affairs.",
-    #     "examples": ["Check my staff tasks", "See if I have any messages"],
-    # },
-    # "personal_assistant": {
-    #     "description": "Handles communications, task lists, calendar, and personal productivity.",
-    #     "examples": ["Check my schedule", "Send an email", "What's on my to-do list"],
-    # },
-    # "librarian": {
-    #     "description": "Performs research, documentation, and knowledge management.",
-    #     "examples": ["Research Pydantic agents", "Find information about AI tools"],
-    # }
-    
-    # New knowledge management and RAG tools
-    "scrape_repo": {
-        "description": "Downloads and analyzes GitHub repositories to store their code for later analysis. You MUST use the FULL GitHub URL as the task parameter. This tool runs asynchronously and takes 1-3 minutes to complete.",
-        "examples": ["https://github.com/tiangolo/fastapi", 
-                     "https://github.com/pydantic/pydantic",
-                     "https://github.com/user/repo",
-                     "https://github.com/some-org/project"],
-        "when_to_use": "When the user explicitly asks to get, scrape, download, or analyze a GitHub repository. Only use with complete GitHub URLs."
+    "valet": {
+        "description": "Manages household staff, daily schedule, and personal affairs.",
+        "examples": ["Check my staff tasks", "See if I have any messages"],
     },
-    "scrape_web": {
-        "description": "Scrapes and analyzes web pages or websites for knowledge capture. You MUST use the FULL URL as the task parameter. This tool runs asynchronously and takes 1-3 minutes to complete.",
-        "examples": ["https://www.example.com/docs", 
-                     "https://blog.example.com/article",
-                     "Analyze the content at https://docs.example.com"],
-        "when_to_use": "When the user wants to scrape, analyze, or capture knowledge from a general website. Only use with complete URLs."
+    "personal_assistant": {
+        "description": "Handles communications, task lists, calendar, and personal productivity.",
+        "examples": ["Check my schedule", "Send an email", "What's on my to-do list"],
     },
-    "scrape_docs": {
-        "description": "Scrapes documentation websites and stores their contents for analysis. Use this when the user wants to import or analyze documentation from a website.",
-        "examples": ["https://pydantic-docs.helpmanual.io/",
-                     "Get the FastAPI documentation at https://fastapi.tiangolo.com",
-                     "Import the docs from the website docs.python.org"],
-        "when_to_use": "When the user explicitly asks to get documentation from a website."
-    },
-    "vectorize_and_store": {
-        "description": "Vectorizes content (files, scraped repos, or documentation) and stores in the database for semantic search. Use this after scraping to process the content.",
-        "examples": ["Process the scraped FastAPI docs for searching", 
-                     "Store the repo content in the vector database"],
-        "when_to_use": "When the user wants to process already scraped content for searching or analysis."
+    "librarian": {
+        "description": "Performs research, documentation, and knowledge management.",
+        "examples": ["Research Pydantic agents", "Find information about AI tools"],
     }
 }
+
+# Additional tools to be implemented later
+# KNOWLEDGE_TOOLS = {
+#     "scrape_repo": {
+#         "description": "Downloads and analyzes GitHub repositories to store their code for later analysis. You MUST use the FULL GitHub URL as the task parameter. This tool runs asynchronously and takes 1-3 minutes to complete.",
+#         "examples": ["https://github.com/tiangolo/fastapi", 
+#                     "https://github.com/pydantic/pydantic",
+#                     "https://github.com/user/repo",
+#                     "https://github.com/some-org/project"],
+#         "when_to_use": "When the user explicitly asks to get, scrape, download, or analyze a GitHub repository. Only use with complete GitHub URLs."
+#     },
+#     "scrape_web": {
+#         "description": "Scrapes and analyzes web pages or websites for knowledge capture. You MUST use the FULL URL as the task parameter. This tool runs asynchronously and takes 1-3 minutes to complete.",
+#         "examples": ["https://www.example.com/docs", 
+#                     "https://blog.example.com/article",
+#                     "Analyze the content at https://docs.example.com"],
+#         "when_to_use": "When the user wants to scrape, analyze, or capture knowledge from a general website. Only use with complete URLs."
+#     },
+#     "scrape_docs": {
+#         "description": "Scrapes documentation websites and stores their contents for analysis. Use this when the user wants to import or analyze documentation from a website.",
+#         "examples": ["https://pydantic-docs.helpmanual.io/",
+#                     "Get the FastAPI documentation at https://fastapi.tiangolo.com",
+#                     "Import the docs from the website docs.python.org"],
+#         "when_to_use": "When the user explicitly asks to get documentation from a website."
+#     },
+#     "vectorize_and_store": {
+#         "description": "Vectorizes content (files, scraped repos, or documentation) and stores in the database for semantic search. Use this after scraping to process the content.",
+#         "examples": ["Process the scraped FastAPI docs for searching", 
+#                     "Store the repo content in the vector database"],
+#         "when_to_use": "When the user wants to process already scraped content for searching or analysis."
+#     }
+# }
 
 # Try to import and register MCP tools
 try:
@@ -134,115 +135,128 @@ def add_tools_to_prompt(prompt: str) -> str:
     
     return prompt + tools_desc
 
-def handle_tool_calls(response_text: str) -> Dict[str, Any]:
-    """Extract and process tool calls from the response text."""
-    logger.debug(f"ATTEMPTING TO PROCESS RESPONSE FOR TOOL CALLS")
-    logger.debug(f"Processing response for tool calls: {response_text[:100]}...")
+def handle_tool_calls(response_text: str, user_input: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Parse tool calls from response text and execute them.
+    Also checks user input for direct tool calls using keyword format.
     
-    # Log the full response at DEBUG level
-    logger.debug(f"Full LLM response to check for tool calls: {response_text}")
-    
-    # Log key parts of the response to help with debugging
-    if len(response_text) > 0:
-        lines = response_text.split('\n')
-        logger.debug(f"Response has {len(lines)} lines, first 3 lines (if available):")
-        for i in range(min(3, len(lines))):
-            logger.debug(f"Line {i+1}: {lines[i]}")
-    
-    # More flexible regex to extract tool calls using various patterns
-    # Add patterns to match more variations including ones without backticks
-    # and the proper format scrape_repo_tool(task="URL")
-    tool_patterns = [
-        # Exact patterns for specific tools with "_tool" suffix
-        r'`?([a-zA-Z_]+_tool)\s*\(\s*task\s*=\s*[\'"](.+?)[\'"]\s*\)`?',  # With _tool suffix
-        r'`([a-zA-Z_]+)\s*\(\s*task\s*=\s*[\'"](.+?)[\'"]\s*\)`',  # Standard format with backticks
-        r'([a-zA-Z_]+)\s*\(\s*task\s*=\s*[\'"](.+?)[\'"]\s*\)',     # Without backticks
-        r'`([a-zA-Z_]+)\s*\([\'"](.+?)[\'"]\)`',                    # Without "task="
-        r'([a-zA-Z_]+)\s*\([\'"](.+?)[\'"]\)',                      # Most permissive
-    ]
-    
-    # Try each pattern
-    tool_matches = []
-    for pattern in tool_patterns:
-        matches = re.findall(pattern, response_text)
-        if matches:
-            logger.debug(f"Found {len(matches)} tool matches with pattern {pattern}")
-            tool_matches.extend(matches)
-            break  # Stop at first successful pattern
-    
-    # If no matches, log clearly with detailed examples of correct formats
-    if not tool_matches:
-        logger.debug("NO TOOL CALLS DETECTED IN LLM RESPONSE")
-        logger.debug("Check formatting in LLM output - needs to use format: `tool_name(task=\"description\")`")
-        logger.debug("Examples of correct formats:")
-        logger.debug("  `scrape_repo(task=\"https://github.com/username/repo\")`")
-        logger.debug("  `scrape_docs(task=\"https://fastapi.tiangolo.com\")`")
-        logger.debug("  `vectorize_and_store(task=\"Process the FastAPI documentation\")`")
-        logger.debug("Tool names must exactly match one of: " + ", ".join(TOOL_DEFINITIONS.keys()))
-    
-    # Log all matches found
-    logger.debug(f"Tool matches found: {tool_matches}")
-    
+    Args:
+        response_text: The text to parse for tool calls
+        user_input: Optional original user input to check for keyword format
+        
+    Returns:
+        Dict containing tool calls and execution results
+    """
+    logger.debug(f"Processing response text for tool calls: {response_text}")
     tool_calls = []
+    execution_results = []
     
-    # Process each potential match
-    for tool_match in tool_matches:
-        # Check if the tool name has a _tool suffix, remove it for matching
-        tool_name = tool_match[0].strip()
-        if tool_name.endswith('_tool'):
-            base_tool_name = tool_name[:-5]  # Remove _tool suffix
-            logger.debug(f"Tool name '{tool_name}' has _tool suffix, checking for base name '{base_tool_name}'")
-            if base_tool_name in TOOL_DEFINITIONS:
-                tool_name = base_tool_name
-                logger.debug(f"Using base tool name '{tool_name}' after removing _tool suffix")
-        
-        task_value = tool_match[1].strip()
-        
-        # Check if it's a recognized tool (including MCP tools)
-        if tool_name in TOOL_DEFINITIONS:
-            # Create args dictionary
-            args = {'task': task_value}
+    # First check user input for keyword format: "tool, name, message"
+    if user_input:
+        keyword_match = re.match(r'^tool,\s*(\w+),\s*(.+)$', user_input.strip())
+        if keyword_match:
+            logger.info("Found keyword format tool call in user input")
+            tool_name = keyword_match.group(1).strip().lower()
+            message = keyword_match.group(2).strip()
+            logger.debug(f"Parsed tool name: {tool_name}, message: {message}")
             
+            # Validate tool exists before proceeding
+            if tool_name not in TOOL_DEFINITIONS:
+                error_msg = f"Unknown tool '{tool_name}'. Available tools: {list(TOOL_DEFINITIONS.keys())}"
+                logger.error(error_msg)
+                return {
+                    "tool_calls": [],
+                    "execution_results": [{
+                        "name": tool_name,
+                        "args": {"task": message},
+                        "result": {"status": "error", "message": error_msg},
+                        "request_id": None
+                    }]
+                }
+            
+            # Generate a unique request ID
+            request_id = len(PENDING_TOOL_REQUESTS) + 1
+            logger.debug(f"Generated request_id: {request_id}")
+            
+            # Add to tool calls
             tool_calls.append({
                 "name": tool_name,
-                "args": args
+                "args": {"task": message}
             })
-            logger.debug(f"VALID TOOL CALL: '{tool_name}' with task='{task_value}'")
-        else:
-            logger.debug(f"INVALID TOOL: '{tool_name}' is not a recognized tool")
-            logger.debug(f"Available tools: {list(TOOL_DEFINITIONS.keys())}")
-    
-    # Create tool requests and execute them immediately
-    execution_results = []
-    for call in tool_calls:
-        try:
-            # Generate a simple request ID
-            request_id = get_next_request_id()
             
-            # Store the request in our pending requests
-            PENDING_TOOL_REQUESTS[request_id] = {
-                "name": call["name"],
-                "args": call["args"],
-                "created_at": datetime.now().isoformat(),
-                "status": "pending"
-            }
-            
-            # Execute the tool directly and get the real response
-            logger.debug(f"Executing tool: {call['name']} with request_id: {request_id}")
-            result = execute_tool(call["name"], call["args"], request_id)
+            # Execute the tool
+            logger.info(f"Executing tool '{tool_name}' with message: {message}")
+            result = execute_tool(
+                tool_name=tool_name,
+                args={"task": message},
+                request_id=request_id
+            )
+            logger.debug(f"Tool execution result: {result}")
             
             # Add to execution results
             execution_results.append({
-                "name": call["name"],
-                "args": call["args"],
+                "name": tool_name,
+                "args": {"task": message},
                 "result": result,
                 "request_id": request_id
             })
-        except Exception as e:
-            logger.critical(f"Failed to process tool call: {e}")
-            import traceback
-            logger.critical(f"Traceback: {traceback.format_exc()}")
+            
+            return {
+                "tool_calls": tool_calls,
+                "execution_results": execution_results
+            }
     
+    # Otherwise look for standard tool call format in LLM response
+    # Look for tool calls in the format: "I'll use the [tool] tool to [task]"
+    logger.debug("Looking for standard format tool calls in LLM response")
+    tool_matches = re.finditer(
+        r"I'll use the (\w+) tool to (.+?)(?=\n|$|I'll use the \w+ tool)",
+        response_text,
+        re.IGNORECASE | re.MULTILINE
+    )
+    
+    for match in tool_matches:
+        tool_name = match.group(1).strip().lower()
+        task = match.group(2).strip()
+        logger.debug(f"Found standard format tool call: {tool_name} with task: {task}")
+        
+        # Validate tool exists
+        if tool_name not in TOOL_DEFINITIONS:
+            error_msg = f"Unknown tool '{tool_name}'. Available tools: {list(TOOL_DEFINITIONS.keys())}"
+            logger.error(error_msg)
+            execution_results.append({
+                "name": tool_name,
+                "args": {"task": task},
+                "result": {"status": "error", "message": error_msg},
+                "request_id": None
+            })
+            continue
+            
+        tool_calls.append({
+            "name": tool_name,
+            "args": {"task": task}
+        })
+    
+    # Execute each tool call
+    for i, call in enumerate(tool_calls):
+        request_id = len(PENDING_TOOL_REQUESTS) + i + 1
+        logger.info(f"Executing tool '{call['name']}' with task: {call['args']['task']}")
+        result = execute_tool(
+            tool_name=call["name"],
+            args=call["args"],
+            request_id=request_id
+        )
+        logger.debug(f"Tool execution result: {result}")
+        execution_results.append({
+            "name": call["name"],
+            "args": call["args"],
+            "result": result,
+            "request_id": request_id
+        })
+    
+    if not tool_calls:
+        logger.warning("No valid tool calls found in response text")
+        
     return {
         "tool_calls": tool_calls,
         "execution_results": execution_results
@@ -260,14 +274,50 @@ def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[int]
     Returns:
         Dict with the tool result
     """
-    logger.debug(f"*** EXECUTE_TOOL DIRECT PRINT: Starting execution of '{tool_name}' (request_id: {request_id}) ***")
+    # Validate inputs
+    if not tool_name or not isinstance(tool_name, str):
+        error_msg = "Tool name must be a non-empty string"
+        logger.error(error_msg)
+        return {"status": "error", "message": error_msg}
+        
+    # Ensure we have a task argument and it's not empty
+    task = args.get("task") or args.get("message", "")
+    if not task or not isinstance(task, str):
+        error_msg = "Task must be a non-empty string"
+        logger.error(error_msg)
+        return {"status": "error", "message": error_msg}
     
-    logger.debug(f"*** TOOL EXECUTION START: '{tool_name}' (request_id: {request_id}) ***")
+    # Clean and validate task content
+    task = task.strip()
+    if not task:
+        error_msg = "Task cannot be empty or just whitespace"
+        logger.error(error_msg)
+        return {"status": "error", "message": error_msg}
+        
+    # Update args with cleaned task
+    args = {"task": task}
+    
+    # Log initial tool request receipt
+    logger.info(f"[TOOL REQUEST] Received request for '{tool_name}' with request_id: {request_id}")
+    
+    # Store initial request status
+    if request_id is not None:
+        PENDING_TOOL_REQUESTS[request_id] = {
+            "name": tool_name,
+            "args": args,
+            "created_at": datetime.now().isoformat(),
+            "status": "received"
+        }
+    
+    # Log start of execution
+    logger.debug(f"[TOOL EXECUTION] Starting execution of '{tool_name}' with args: {args} (request_id: {request_id})")
     logger.debug(f"Tool arguments: {json.dumps(args, indent=2)}")
     
-    # Add request_id to args for tools that track them
-    args_with_request_id = {**args, "request_id": request_id}
-
+    # Update status to in_progress
+    if request_id is not None:
+        PENDING_TOOL_REQUESTS[request_id]["status"] = "in_progress"
+        PENDING_TOOL_REQUESTS[request_id]["execution_started_at"] = datetime.now().isoformat()
+    
     try:
         # First check if it's an MCP tool
         if tool_name.startswith("mcp_") and tool_name in MCP_TOOL_REGISTRY:
@@ -281,6 +331,9 @@ def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[int]
             if endpoint == "brave_search" and not os.environ.get("BRAVE_API_KEY"):
                 error_msg = f"Cannot execute {tool_name} - missing BRAVE_API_KEY environment variable"
                 logger.error(error_msg)
+                if request_id is not None:
+                    PENDING_TOOL_REQUESTS[request_id]["status"] = "error"
+                    PENDING_TOOL_REQUESTS[request_id]["error"] = error_msg
                 return {
                     "status": "error",
                     "message": error_msg,
@@ -295,159 +348,101 @@ def execute_tool(tool_name: str, args: Dict[str, Any], request_id: Optional[int]
                 import asyncio
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(mcp_tool_function(**args_with_request_id))
+                result = loop.run_until_complete(mcp_tool_function(**args))
                 loop.close()
                 
                 # Handle async MCP tool
                 if result and result.get("status") == "pending":
                     logger.debug(f"MCP tool request is pending asynchronous execution")
-                    # Store the pending request
-                    PENDING_TOOL_REQUESTS[request_id] = {
-                        "name": tool_name,
-                        "args": args,
-                        "created_at": datetime.now().isoformat(),
-                        "status": "pending",
-                        "pending_response": result
-                    }
+                    # Update request status to pending
+                    if request_id is not None:
+                        PENDING_TOOL_REQUESTS[request_id]["status"] = "pending"
+                        PENDING_TOOL_REQUESTS[request_id]["pending_response"] = result
+                else:
+                    # Update request status to completed
+                    if request_id is not None:
+                        PENDING_TOOL_REQUESTS[request_id]["status"] = "completed"
+                        PENDING_TOOL_REQUESTS[request_id]["completed_at"] = datetime.now().isoformat()
+                        PENDING_TOOL_REQUESTS[request_id]["response"] = result
                 
                 return result
             except Exception as e:
                 error_msg = f"Error executing MCP tool {tool_name}: {str(e)}"
                 logger.error(error_msg)
+                if request_id is not None:
+                    PENDING_TOOL_REQUESTS[request_id]["status"] = "error"
+                    PENDING_TOOL_REQUESTS[request_id]["error"] = error_msg
                 return {
                     "status": "error", 
                     "message": error_msg,
                     "request_id": request_id
                 }
         
-        # New tools implementations
-        elif tool_name == "scrape_repo":
-            logger.debug(f"*** DIRECT PRINT: About to import scrape_repo_tool ***")
-            logger.debug(f"Importing scrape_repo_tool...")
-            from src.tools.scrape_repo_tool import scrape_repo_tool
-            logger.debug(f"*** DIRECT PRINT: About to call scrape_repo_tool with {args_with_request_id} ***")
-            logger.debug(f"Calling scrape_repo_tool with {args_with_request_id}")
-            result = scrape_repo_tool(**args_with_request_id)
-            
-            # Handle async scrape_repo tool
-            if result and result.get("status") == "pending":
-                logger.debug(f"*** DIRECT PRINT: Scrape repo request is pending asynchronous execution ***")
-                # Store the pending request
-                PENDING_TOOL_REQUESTS[request_id] = {
-                    "name": "scrape_repo",
-                    "args": args,
-                    "created_at": datetime.now().isoformat(),
-                    "status": "pending",
-                    "pending_response": result
-                }
+        # Handle the three main agent tools
+        elif tool_name in ["valet", "personal_assistant", "librarian"]:
+            try:
+                # Get the appropriate tool function
+                tool_function = {
+                    "valet": valet_tool,
+                    "personal_assistant": personal_assistant_tool,
+                    "librarian": librarian_tool
+                }[tool_name]
                 
-        elif tool_name == "scrape_web":
-            logger.debug(f"*** DIRECT PRINT: About to import scrape_web_tool ***")
-            logger.info(f"Importing scrape_web_tool...")
-            from src.tools.scrape_web_tool import scrape_web_tool
-            logger.debug(f"*** DIRECT PRINT: About to call scrape_web_tool with {args_with_request_id} ***")
-            logger.debug(f"Calling scrape_web_tool with {args_with_request_id}")
-            result = scrape_web_tool(**args_with_request_id)
-            
-            # Handle async scrape_web tool
-            if result and result.get("status") == "pending":
-                logger.debug(f"*** DIRECT PRINT: Scrape web request is pending asynchronous execution ***")
-                # Store the pending request
-                PENDING_TOOL_REQUESTS[request_id] = {
-                    "name": "scrape_web",
-                    "args": args,
-                    "created_at": datetime.now().isoformat(),
-                    "status": "pending",
-                    "pending_response": result
+                # Execute the tool
+                result = tool_function(task=task, request_id=request_id)
+                
+                # Update request status based on result
+                if request_id is not None:
+                    if result and isinstance(result, dict):
+                        status = result.get("status", "completed")
+                        PENDING_TOOL_REQUESTS[request_id]["status"] = status
+                        if status == "completed":
+                            PENDING_TOOL_REQUESTS[request_id]["completed_at"] = datetime.now().isoformat()
+                        PENDING_TOOL_REQUESTS[request_id]["response"] = result
+                    else:
+                        PENDING_TOOL_REQUESTS[request_id]["status"] = "error"
+                        PENDING_TOOL_REQUESTS[request_id]["error"] = "Tool returned invalid result"
+                        result = {
+                            "status": "error",
+                            "message": "Tool returned invalid result",
+                            "request_id": request_id
+                        }
+                
+                return result
+                
+            except Exception as e:
+                error_msg = f"Error executing {tool_name} tool: {str(e)}"
+                logger.error(error_msg)
+                if request_id is not None:
+                    PENDING_TOOL_REQUESTS[request_id]["status"] = "error"
+                    PENDING_TOOL_REQUESTS[request_id]["error"] = error_msg
+                return {
+                    "status": "error",
+                    "message": error_msg,
+                    "request_id": request_id
                 }
         
-        elif tool_name == "scrape_docs":
-            logger.debug(f"*** DIRECT PRINT: About to import scrape_docs_tool ***")
-            logger.info(f"Importing scrape_docs_tool...")
-            from src.tools.scrape_docs_tool import scrape_docs_tool
-            logger.debug(f"*** DIRECT PRINT: About to call scrape_docs_tool with {args_with_request_id} ***")
-            logger.debug(f"Calling scrape_docs_tool with {args_with_request_id}")
-            result = scrape_docs_tool(**args_with_request_id)
-            
-            # Handle async scrape_docs tool
-            if result and result.get("status") == "pending":
-                logger.debug(f"*** DIRECT PRINT: Scrape docs request is pending asynchronous execution ***")
-                # Store the pending request
-                PENDING_TOOL_REQUESTS[request_id] = {
-                    "name": "scrape_docs",
-                    "args": args,
-                    "created_at": datetime.now().isoformat(),
-                    "status": "pending",
-                    "pending_response": result
-                }
-        
-        elif tool_name == "vectorize_and_store":
-            logger.debug(f"*** DIRECT PRINT: About to import vectorize_and_store_tool ***")
-            logger.debug(f"Importing vectorize_and_store_tool...")
-            from src.tools.vectorize_and_store_tool import vectorize_and_store_tool
-            logger.debug(f"*** DIRECT PRINT: About to call vectorize_and_store_tool with {json.dumps(args_with_request_id, indent=2)} ***")
-            logger.debug(f"Calling vectorize_and_store_tool with {json.dumps(args_with_request_id, indent=2)}")
-            result = vectorize_and_store_tool(**args_with_request_id)
-            
-            # Handle async vectorize_and_store tool
-            if result and result.get("status") == "pending":
-                logger.debug(f"*** DIRECT PRINT: Vectorize and store request is pending asynchronous execution ***")
-                # Store the pending request
-                PENDING_TOOL_REQUESTS[request_id] = {
-                    "name": "vectorize_and_store",
-                    "args": args,
-                    "created_at": datetime.now().isoformat(),
-                    "status": "pending",
-                    "pending_response": result
-                }
         else:
-            logger.error(f"Unknown tool '{tool_name}' requested")
+            error_msg = f"Unknown tool '{tool_name}' requested"
+            logger.error(error_msg)
+            if request_id is not None:
+                PENDING_TOOL_REQUESTS[request_id]["status"] = "error"
+                PENDING_TOOL_REQUESTS[request_id]["error"] = error_msg
             return {
                 "status": "error",
-                "message": f"Unknown tool: {tool_name}",
+                "message": error_msg,
                 "request_id": request_id
             }
-        
-        # Verify we got a result
-        if result is None:
-            logger.error(f"Tool {tool_name} returned None")
-            result = {
-                "status": "error",
-                "message": f"Tool {tool_name} returned None",
-                "request_id": request_id
-            }
-        
-        # For immediate responses, update pending request with the response
-        if result.get("status") != "pending" and request_id in PENDING_TOOL_REQUESTS:
-            PENDING_TOOL_REQUESTS[request_id] = {
-                **PENDING_TOOL_REQUESTS[request_id],
-                "status": "completed",
-                "completed_at": datetime.now().isoformat(),
-                "response": result
-            }
-        
-        logger.debug(f"*** EXECUTE_TOOL DIRECT PRINT: Completed execution of '{tool_name}' with status: {result.get('status', 'unknown')} ***")
-        logger.debug(f"*** TOOL EXECUTION COMPLETE: '{tool_name}' (status: {result.get('status', 'unknown')}) ***")
-        logger.debug(f"Full response: {json.dumps(result, indent=2)}")
-        
-        return result
     
-    except ImportError as e:
-        error_msg = f"Import error executing tool '{tool_name}': {str(e)}"
-        logger.critical(error_msg)
-        logger.debug(f"*** TOOL EXECUTION FAILED: '{tool_name}' (ImportError) ***")
-        return {
-            "status": "error",
-            "message": f"Tool '{tool_name}' not found: {str(e)}",
-            "request_id": request_id
-        }
     except Exception as e:
-        error_msg = f"Error executing tool '{tool_name}': {str(e)}"
+        error_msg = f"Unexpected error executing tool '{tool_name}': {str(e)}"
         logger.error(error_msg)
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        logger.debug(f"*** TOOL EXECUTION FAILED: '{tool_name}' (Exception) ***")
         
+        if request_id is not None:
+            PENDING_TOOL_REQUESTS[request_id]["status"] = "error"
+            PENDING_TOOL_REQUESTS[request_id]["error"] = error_msg
         return {
             "status": "error",
             "message": error_msg,
@@ -485,8 +480,20 @@ def format_completed_tools_prompt(request_id: str, user_input: str) -> str:
         return "I'm sorry, I couldn't find the results for your previous request."
     
     request = PENDING_TOOL_REQUESTS[request_id]
-    tool_name = request["name"]
-    response = request.get("response", "No response available")
+    tool_name = request.get("name", "unknown")
+    
+    # Extract the response message - can be either directly in the request 
+    # or in a nested response field
+    if "message" in request:
+        response_message = request["message"]
+    elif "response" in request and isinstance(request["response"], dict) and "message" in request["response"]:
+        response_message = request["response"]["message"]
+    else:
+        # Fallback to the entire request as JSON string
+        response_message = json.dumps(request, indent=2)
+    
+    # Log the extracted message
+    logger.debug(f"[{datetime.now().isoformat()}] Extracted tool response message: {response_message[:100]}...")
     
     prompt = f"""You are Ronan, an intelligent assistant.
 
@@ -500,7 +507,7 @@ IMPORTANT INSTRUCTIONS:
 Here are the EXACT results received:
 
 ====== BEGIN TOOL RESULTS ======
-{response}
+{response_message}
 ====== END TOOL RESULTS ======
 
 Provide ONLY information contained in these results to the user.
@@ -508,198 +515,63 @@ Be direct and to the point.
 
 Agent:"""
 
-    return prompt 
+    return prompt
 
 def check_completed_tool_requests():
-    """Check for completed tool requests from all relevant tools."""
-    try:
-        # Track which modules we've already checked to avoid repeated import attempts
-        checked_modules = {}
+    """Check for completed tool requests and return their results."""
+    check_time = datetime.now()
+    logger.debug(f"[{check_time.isoformat()}] Checking for completed tool requests")
+    
+    completed_requests = {}
+    
+    # Check PENDING_TOOL_REQUESTS for completed tasks
+    for request_id, response in list(PENDING_TOOL_REQUESTS.items()):
+        status = response.get("status")
+        logger.debug(f"[{check_time.isoformat()}] Request {request_id} has status: {status}")
         
-        # Only check for modules that have pending requests
-        pending_request_tools = set()
-        for request_id, request_info in PENDING_TOOL_REQUESTS.items():
-            if request_info.get("status") == "pending":
-                tool_name = request_info.get("name", "")
-                if tool_name:
-                    pending_request_tools.add(tool_name)
-        
-        # Check for completed MCP requests - these are always checked first
-        if not checked_modules.get("mcp", False):
-            try:
-                # Check MCP completed requests
-                check_completed_mcp_requests()
-                checked_modules["mcp"] = True
-                
-                # Direct import for testing specific MCP requests
-                from src.services.mcp_services.mcp_adapter import PENDING_MCP_REQUESTS
-                for request_id, response in list(PENDING_MCP_REQUESTS.items()):
-                    if request_id in PENDING_TOOL_REQUESTS and PENDING_TOOL_REQUESTS[request_id].get("status") != "completed":
-                        status = response.get("status")
-                        if status in ["completed", "error"]:
-                            logger.debug(f"*** DIRECT PRINT: Found completed MCP request: {request_id} ***")
-                            logger.info(f"Found completed MCP request: {request_id} with status: {status}")
-                            
-                            # For errors, include the error message in the response
-                            if status == "error":
-                                error_msg = response.get("error", "Unknown error")
-                                logger.error(f"MCP request {request_id} failed: {error_msg}")
-                                response = {
-                                    "status": "error",
-                                    "message": f"The request failed: {error_msg}",
-                                    "error": error_msg
-                                }
-                            
-                            # Update the pending request with the result
-                            PENDING_TOOL_REQUESTS[request_id] = {
-                                **PENDING_TOOL_REQUESTS[request_id],
-                                "status": status,
-                                "completed_at": datetime.now().isoformat(),
-                                "response": response
-                            }
-                            
-                            # Remove from MCP's pending requests
-                            del PENDING_MCP_REQUESTS[request_id]
-            except ImportError:
-                checked_modules["mcp"] = False
-                if not hasattr(check_completed_tool_requests, "logged_mcp"):
-                    logger.debug("MCP services not available for checking completed requests")
-                    check_completed_tool_requests.logged_mcp = True
-            except Exception as e:
-                logger.error(f"Error checking MCP requests: {e}")
+        if status in ["success", "error"]:
+            logger.debug(f"[{check_time.isoformat()}] Found completed request: {request_id} with status: {status}")
+            logger.info(f"[{check_time.isoformat()}] Found completed request: {request_id}")
             
-        # Track which modules we've already checked to avoid repeated import attempts
-        checked_modules = {}
-        
-        # Only check for modules that have pending requests
-        pending_request_tools = set()
-        for request_id, request_info in PENDING_TOOL_REQUESTS.items():
-            if request_info.get("status") == "pending":
-                tool_name = request_info.get("name", "")
-                if tool_name:
-                    pending_request_tools.add(tool_name)
-        
-        # Only log about imports the first time we run
-        if not hasattr(check_completed_tool_requests, "has_run"):
-            logger.debug(f"Available tools to check: {pending_request_tools}")
-            check_completed_tool_requests.has_run = True
+            # Update status to 'completed' to signal to the agent that processing is done
+            response["status"] = "completed"
+            response["marked_completed_at"] = check_time.isoformat()
+            PENDING_TOOL_REQUESTS[request_id] = response
+            logger.debug(f"[{check_time.isoformat()}] Updated request {request_id} status to 'completed'")
             
-        # Check for completed scrape_repo requests if we have any pending
-        if "scrape_repo" in pending_request_tools and "scrape_repo" not in checked_modules:
-            try:
-                from src.tools.scrape_repo_tool import PENDING_SCRAPE_REPO_REQUESTS
-                checked_modules["scrape_repo"] = True
-                
-                for request_id, response in list(PENDING_SCRAPE_REPO_REQUESTS.items()):
-                    if request_id in PENDING_TOOL_REQUESTS and PENDING_TOOL_REQUESTS[request_id].get("status") != "completed":
-                        logger.debug(f"*** DIRECT PRINT: Found completed scrape_repo request: {request_id} ***")
-                        logger.debug(f"Found completed scrape_repo request: {request_id}")
-                        
-                        PENDING_TOOL_REQUESTS[request_id] = {
-                            **PENDING_TOOL_REQUESTS[request_id],
-                            "status": "completed",
-                            "completed_at": datetime.now().isoformat(),
-                            "response": response
-                        }
-                        
-                        # Remove from tool's pending requests
-                        del PENDING_SCRAPE_REPO_REQUESTS[request_id]
-            except ImportError:
-                checked_modules["scrape_repo"] = False
-                if not hasattr(check_completed_tool_requests, "logged_scrape_repo"):
-                    logger.debug("scrape_repo_tool module not available for checking completed requests")
-                    check_completed_tool_requests.logged_scrape_repo = True
+            # Add to completed requests
+            completed_requests[request_id] = response
+    
+    # Check MCP tool requests if available
+    if "check_completed_mcp_requests" in globals():
+        mcp_completed = check_completed_mcp_requests()
+        if mcp_completed:
+            completed_requests.update(mcp_completed)
+    
+    if completed_requests:
+        logger.info(f"[{check_time.isoformat()}] Returning {len(completed_requests)} completed requests")
         
-        # Check for completed scrape_docs requests if we have any pending
-        if "scrape_docs" in pending_request_tools and "scrape_docs" not in checked_modules:
-            try:
-                from src.tools.scrape_docs_tool import PENDING_SCRAPE_DOCS_REQUESTS
-                checked_modules["scrape_docs"] = True
-                
-                for request_id, response in list(PENDING_SCRAPE_DOCS_REQUESTS.items()):
-                    if request_id in PENDING_TOOL_REQUESTS and PENDING_TOOL_REQUESTS[request_id].get("status") != "completed":
-                        logger.debug(f"*** DIRECT PRINT: Found completed scrape_docs request: {request_id} ***")
-                        logger.info(f"Found completed scrape_docs request: {request_id}")
-                        
-                        PENDING_TOOL_REQUESTS[request_id] = {
-                            **PENDING_TOOL_REQUESTS[request_id],
-                            "status": "completed",
-                            "completed_at": datetime.now().isoformat(),
-                            "response": response
-                        }
-                        
-                        # Remove from tool's pending requests
-                        del PENDING_SCRAPE_DOCS_REQUESTS[request_id]
-            except ImportError:
-                checked_modules["scrape_docs"] = False
-                if not hasattr(check_completed_tool_requests, "logged_scrape_docs"):
-                    logger.debug("scrape_docs_tool module not available for checking completed requests")
-                    check_completed_tool_requests.logged_scrape_docs = True
-        
-        # Check for completed vectorize_and_store requests if we have any pending
-        if "vectorize_and_store" in pending_request_tools and "vectorize_and_store" not in checked_modules:
-            try:
-                from src.tools.vectorize_and_store_tool import PENDING_VECTORIZE_REQUESTS
-                checked_modules["vectorize_and_store"] = True
-                
-                for request_id, response in list(PENDING_VECTORIZE_REQUESTS.items()):
-                    if request_id in PENDING_TOOL_REQUESTS and PENDING_TOOL_REQUESTS[request_id].get("status") != "completed":
-                        logger.debug(f"*** DIRECT PRINT: Found completed vectorize_and_store request: {request_id} ***")
-                        logger.info(f"Found completed vectorize_and_store request: {request_id}")
-                        
-                        PENDING_TOOL_REQUESTS[request_id] = {
-                            **PENDING_TOOL_REQUESTS[request_id],
-                            "status": "completed",
-                            "completed_at": datetime.now().isoformat(),
-                            "response": response
-                        }
-                        
-                        # Remove from tool's pending requests
-                        del PENDING_VECTORIZE_REQUESTS[request_id]
-            except ImportError:
-                checked_modules["vectorize_and_store"] = False
-                if not hasattr(check_completed_tool_requests, "logged_vectorize"):
-                    logger.debug("vectorize_and_store_tool module not available for checking completed requests")
-                    check_completed_tool_requests.logged_vectorize = True
-            
-        # Keep the librarian checker in case it's needed in the future
-        if "librarian" in pending_request_tools and "librarian" not in checked_modules:
-            try:
-                from src.tools.librarian import PENDING_LIBRARIAN_REQUESTS
-                checked_modules["librarian"] = True
-                
-                for request_id, response in list(PENDING_LIBRARIAN_REQUESTS.items()):
-                    if request_id in PENDING_TOOL_REQUESTS and PENDING_TOOL_REQUESTS[request_id].get("status") != "completed":
-                        logger.debug(f"*** DIRECT PRINT: Found completed librarian request: {request_id} ***")
-                        logger.info(f"Found completed librarian request: {request_id}")
-                        
-                        PENDING_TOOL_REQUESTS[request_id] = {
-                            **PENDING_TOOL_REQUESTS[request_id],
-                            "status": "completed",
-                            "completed_at": datetime.now().isoformat(),
-                            "response": response
-                        }
-                        
-                        # Remove from librarian's pending requests
-                        del PENDING_LIBRARIAN_REQUESTS[request_id]
-            except ImportError:
-                checked_modules["librarian"] = False
-                if not hasattr(check_completed_tool_requests, "logged_librarian"):
-                    logger.debug("Librarian module not available for checking completed requests")
-                    check_completed_tool_requests.logged_librarian = True
-        
-    except Exception as e:
-        logger.error(f"Error checking completed tool requests: {e}")
+    return completed_requests if completed_requests else None
 
-# Start a background thread to periodically check for completed tool requests
 def start_tool_checker():
     """Start a background thread to check for completed tool requests."""
     def check_loop():
         # Track when we last checked each module to avoid too frequent logging
         last_checked = {}
-        check_interval = 5  # Log availability every 5 seconds at most
+        check_interval = 10  # Log availability every 10 seconds at most
+        check_count = 0
         
         while True:
+            # Get current time for this check
+            check_time = datetime.now()
+            check_count += 1
+            
+            # Always log every 10th check at INFO level
+            if check_count % 10 == 0:
+                logger.debug(f"[{check_time.isoformat()}] Running check #{check_count} for completed tool requests")
+            else:
+                logger.debug(f"[{check_time.isoformat()}] Running check #{check_count} for completed tool requests")
+            
             # Record current time for interval tracking
             now = time.time()
             
@@ -722,17 +594,21 @@ def start_tool_checker():
                 logger.setLevel(logging.WARNING)  # Suppress INFO logs during most checks
                 
             try:
-                check_completed_tool_requests()
+                completed = check_completed_tool_requests()
+                if completed:
+                    logger.info(f"[{check_time.isoformat()}] Found {len(completed)} completed requests in check #{check_count}")
             finally:
                 # Restore original level
                 logger.setLevel(original_level)
-                
-            time.sleep(1)  # Check every second
             
-    checker_thread = threading.Thread(target=check_loop)
+            # Sleep for a short time between checks (0.5 second)
+            time.sleep(0.5)
+            
+    # Create thread with a meaningful name for easier debugging
+    checker_thread = threading.Thread(target=check_loop, name="ToolCompletionChecker")
     checker_thread.daemon = True
     checker_thread.start()
-    logger.info("Started background thread to check for completed tool requests")
+    logger.info(f"[{datetime.now().isoformat()}] Started background thread to check for completed tool requests")
 
 # Start the checker thread when the module is imported
 start_tool_checker() 

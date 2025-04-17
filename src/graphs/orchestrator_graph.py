@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import uuid
 from enum import Enum
+import logging
 
 # Third-party imports
 from pydantic import ValidationError as PydanticValidationError, BaseModel, Field, field_validator, model_validator
@@ -44,6 +45,8 @@ from src.state.state_manager import (
     update_agent_state,
     add_task_to_history
 )
+
+logger = logging.getLogger(__name__)
 
 # Build the graph
 def build_orchestrator_graph() -> StateGraph:
@@ -83,7 +86,7 @@ def main():
         
         print("Conversation history:")
         for message in manager.get_conversation_context():
-            print(f"{message.role}: {message.content}")
+            logger.info(f"{message.role}: {message.content}")
             
         # Test task management
         manager.set_task("Help the user")
@@ -91,7 +94,7 @@ def main():
         
         print("\nTask history:")
         for task in manager.get_task_history():
-            print(f"- {task}")
+            logger.info(f"- {task}")
             
         # Test agent state updates
         manager.update_agent_state("librarian", {"status": "ready"})
@@ -99,10 +102,10 @@ def main():
         
         print("\nAgent states:")
         for agent_id, state in manager.state['agent_states'].items():
-            print(f"- {agent_id}: {state}")
+            logger.info(f"- {agent_id}: {state}")
         
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         
     print("\nState manager test complete.")
 

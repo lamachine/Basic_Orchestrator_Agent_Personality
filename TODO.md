@@ -584,6 +584,17 @@ async def build_agent(ctx: Context, spec: str) -> str:
 
 **Checklist:**
 - [ ] Create/verify agent handler modules: `agent_valet.py`, `agent_librarian.py`, `agent_personal_assistant.py` (or similar).
+    - [x] Create backup for @ai_agent.py
+    - [x] Create BaseAgent
+    - [x] Refactor ai_agent to use BaseAgent
+    - [x] TEST - from CLI at least, but maybe from pytest as well.
+    - [x] Refactor one of the agents (probably librarian) to use the base class.
+    - [ ] Add a canned response to librarian_tool and test orchestrator->librarian_tool call
+    - [ ] Update librarian_tool to delegate to LibrarianAgent and test
+    - [ ] Register RAG/crawl tools in LibrarianAgent and test end-to-end
+    - [ ] Give librarian db RAG search tools and existing crawl tools.
+    - [ ] TEST.
+    - [ ] Refactor valet and personal_assistant
 - [ ] Move tool registry and prompt logic into each agent handler.
 - [ ] Refactor the orchestrator's main loop to:
     - Only route to agents, not tools.
@@ -597,3 +608,22 @@ async def build_agent(ctx: Context, spec: str) -> str:
 ---
 
 Let's work through this checklist step by step!
+
+## Agentic Orchestration & Tool Request/Response Flow
+
+- [ ] Implement full agentic tool request/response flow:
+    - [ ] Orchestrator creates and tracks request IDs and statuses for all tool calls
+    - [ ] Orchestrator sends tool requests and updates status to 'pending' after agent acknowledges
+    - [ ] Tool/agent acknowledges receipt of task and logs it with request ID
+    - [ ] Agent sends its own prompt to the LLM and handles recursive tool requests as needed
+    - [ ] All agent/tool messages are logged with metadata and request ID for traceability
+    - [ ] When a tool/agent completes, the result is injected into the next LLM prompt with clear instructions to use ONLY that result
+    - [ ] LLM can decide to make further tool requests or mark the request as complete
+    - [ ] Orchestrator/agent sends the final answer to the user and updates status to 'complete'
+    - [ ] Add robust error/timeout handling for long-running or failed tools (not just pending forever)
+    - [ ] Provide user feedback/status updates while tools are pending (non-blocking UX)
+    - [ ] Ensure agent-to-agent calls are only allowed in controlled, chained workflows (e.g., gather-then-compile), and are always tracked by the controlling agent for transparency
+    - [ ] Test each step with canned responses and obvious requests before adding real tool/agent logic
+    - [ ] Add comprehensive logging and metadata for all async tool/agent calls and results
+
+# (Rest of your TODO list continues below...)

@@ -113,8 +113,13 @@ Example: `{tool.example}`
 """
     
     prompt_section += """
-When you need to use a tool, say "I'll use the [tool name] tool to [brief description of task]" 
-followed by the tool call using the proper syntax.
+When you need to use a tool, you can use either format:
+1. Simple format: "tool, [tool name], [task]"
+2. Standard format: "I'll use the [tool name] tool to [task]"
+
+For example:
+- "tool, librarian, research pydantic"
+- "I'll use the librarian tool to research pydantic"
 """
     
     return prompt_section

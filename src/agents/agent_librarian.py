@@ -3,13 +3,20 @@
 import logging
 from src.tools.librarian import librarian_tool
 from src.tools.tool_registry import ToolRegistry, ToolDescription
+from src.agents.base_agent import BaseAgent
+from src.config import Configuration
 
-logger = logging.getLogger("orchestrator.librarian")
+config = Configuration()
 
-class LibrarianAgent:
+class LibrarianAgent(BaseAgent):
     """Handles librarian agent requests and tool registry."""
     def __init__(self):
-        self.tool_registry = ToolRegistry()
+        super().__init__(
+            name="librarian",
+            prompt_section="You are the Librarian agent. You perform research, documentation crawling, and knowledge management. Use the librarian tool for all related tasks.",
+            api_url=config.ollama_api_url + '/api/generate',
+            model=config.ollama_model
+        )
         self.tool_registry.register_tool(
             ToolDescription(
                 name="librarian",
@@ -19,12 +26,7 @@ class LibrarianAgent:
                 example="librarian(task='Research Pydantic agents and save the results')"
             )
         )
-        self.prompt_section = (
-            "You are the Librarian agent. You perform research, documentation crawling, and knowledge management. "
-            "Use the librarian tool for all related tasks."
-        )
 
-    def handle_request(self, user_input: str) -> str:
-        """Process a user request and route to the librarian tool if appropriate."""
-        logger.info(f"Handling librarian request: {user_input}")
-        return str(librarian_tool(task=user_input)) 
+    def handle_request(self, user_input: str) -> dict:
+        self.log_message(f"Handling librarian request: {user_input}")
+        return self.call_tool("librarian", task=user_input) 
