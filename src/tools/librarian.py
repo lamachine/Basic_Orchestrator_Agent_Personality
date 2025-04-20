@@ -14,8 +14,8 @@ import requests
 # Get the existing logger - don't configure it at the tool level
 logger = logging.getLogger(__name__)
 
-# Import orchestrator's request tracking
-from src.agents.orchestrator_tools import PENDING_TOOL_REQUESTS
+# Remove the top-level import to break the circular dependency
+# from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS
 
 def _process_task(task: str, request_id: str):
     """
@@ -30,7 +30,7 @@ def _process_task(task: str, request_id: str):
     """
     try:
         start_time = datetime.now()
-        logger.info(f"[{start_time.isoformat()}] Librarian tool processing task: '{task}' with request_id={request_id}")
+        logger.debug(f"[{start_time.isoformat()}] Librarian tool processing task: '{task}' with request_id={request_id}")
         logger.debug(f"TRACKING: Librarian background processing started for request_id={request_id}")
         
         # Simulated processing time with a synthetic 5 second delay
@@ -38,7 +38,7 @@ def _process_task(task: str, request_id: str):
         
         # Simulate task completion
         completion_time = datetime.now()
-        logger.info(f"[{completion_time.isoformat()}] Librarian task processing completed after {(completion_time-start_time).total_seconds():.2f} seconds")
+        logger.debug(f"[{completion_time.isoformat()}] Librarian task processing completed after {(completion_time-start_time).total_seconds():.2f} seconds")
 
         # Generate a response - ensure request_id is included correctly
         response = {
@@ -51,7 +51,10 @@ def _process_task(task: str, request_id: str):
         
         # Update the global requests dictionary
         try:
-            logger.info(f"[{completion_time.isoformat()}] Updating PENDING_TOOL_REQUESTS[{request_id}] with completed response")
+            # Import here to avoid circular dependency
+            from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS
+            
+            logger.debug(f"[{completion_time.isoformat()}] Updating PENDING_TOOL_REQUESTS[{request_id}] with completed response")
             logger.debug(f"TRACKING: Setting completed status for request_id={request_id} in PENDING_TOOL_REQUESTS")
             PENDING_TOOL_REQUESTS[request_id] = {
                 "name": "librarian",
@@ -61,7 +64,7 @@ def _process_task(task: str, request_id: str):
                 "response": response,
                 "request_id": request_id  # Make sure request_id is consistently included
             }
-            logger.info(f"[{completion_time.isoformat()}] Librarian tool completed: response for request_id={request_id}")
+            logger.debug(f"[{completion_time.isoformat()}] Librarian tool completed: response for request_id={request_id}")
         
         except Exception as e:
             logger.error(f"[{completion_time.isoformat()}] Error updating PENDING_TOOL_REQUESTS: {e}")
@@ -93,13 +96,16 @@ def librarian_tool(task: str, request_id: Optional[str] = None) -> Dict[str, Any
     # Generate a request ID if none provided
     if request_id is None:
         request_id = str(uuid.uuid4())
-        logger.info(f"[{current_time.isoformat()}] Generated new request_id: {request_id}")
+        logger.debug(f"[{current_time.isoformat()}] Generated new request_id: {request_id}")
         logger.debug(f"TRACKING: Generated new request_id in librarian_tool: {request_id}")
     else:
-        logger.info(f"[{current_time.isoformat()}] Using provided request_id: {request_id}")
+        logger.debug(f"[{current_time.isoformat()}] Using provided request_id: {request_id}")
         logger.debug(f"TRACKING: Using provided request_id in librarian_tool: {request_id}")
         
-    logger.info(f"[{current_time.isoformat()}] Librarian tool called with task: '{task}', request_id={request_id}")
+    logger.debug(f"[{current_time.isoformat()}] Librarian tool called with task: '{task}', request_id={request_id}")
+    
+    # Import here to avoid circular dependency
+    from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS
     
     # Add to pending requests - make sure request_id is consistently included
     logger.debug(f"TRACKING: Adding {request_id} to PENDING_TOOL_REQUESTS with status=pending")
@@ -118,7 +124,7 @@ def librarian_tool(task: str, request_id: Optional[str] = None) -> Dict[str, Any
     )
     task_thread.daemon = True
     task_thread.start()
-    logger.info(f"[{current_time.isoformat()}] Started background processing thread for request_id={request_id}")
+    logger.debug(f"[{current_time.isoformat()}] Started background processing thread for request_id={request_id}")
     
     # Return immediate acknowledgment - ensure request_id is included consistently
     response = {
@@ -133,9 +139,9 @@ def librarian_tool(task: str, request_id: Optional[str] = None) -> Dict[str, Any
     }
     
     # Store initial pending response
-    logger.info(f"[{current_time.isoformat()}] Storing initial pending response for request_id={request_id}")
+    logger.debug(f"[{current_time.isoformat()}] Storing initial pending response for request_id={request_id}")
     logger.debug(f"TRACKING: Returning response with status=pending for request_id={request_id}")
     PENDING_TOOL_REQUESTS[request_id] = response
     
-    logger.info(f"[{current_time.isoformat()}] Returning initial response for request_id={request_id}")
+    logger.debug(f"[{current_time.isoformat()}] Returning initial response for request_id={request_id}")
     return response 

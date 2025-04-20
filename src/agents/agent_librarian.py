@@ -1,7 +1,8 @@
 """Librarian agent handler module."""
 
 import logging
-from src.tools.librarian import librarian_tool
+# Remove the top-level import to avoid circular dependency
+# from src.tools.librarian import librarian_tool
 from src.tools.tool_registry import ToolRegistry, ToolDescription
 from src.agents.base_agent import BaseAgent
 from src.config import Configuration
@@ -17,6 +18,10 @@ class LibrarianAgent(BaseAgent):
             api_url=config.ollama_api_url + '/api/generate',
             model=config.ollama_model
         )
+        
+        # Import the librarian_tool here to avoid circular dependencies
+        from src.tools.librarian import librarian_tool
+        
         self.tool_registry.register_tool(
             ToolDescription(
                 name="librarian",

@@ -2,7 +2,11 @@ import json
 import requests
 import logging
 import time
-from typing import Dict, Any
+import os
+from typing import Dict, Any, List
+
+# Import OllamaClient for embeddings
+from ollama import Client as OllamaClient
 
 class LLMService:
     def __init__(self, api_url: str, model: str):
@@ -37,6 +41,45 @@ class LLMService:
         self.logger.debug(f"\nFull response:\n{self._format_json(response_json)}")
         self.logger.debug("-" * 80)
 
+    def get_response(self, system_prompt: str = "", conversation_history: List[Dict[str, str]] = None) -> str:
+        """
+        Get a response from the LLM using a system prompt and conversation history.
+        
+        This is a compatibility method for BaseAgent which expects this format.
+        
+        Args:
+            system_prompt: The system prompt for the LLM
+            conversation_history: List of messages in the format [{"role": "user", "content": "..."}]
+            
+        Returns:
+            The LLM's response text
+        """
+        try:
+            # Build a prompt from the system prompt and conversation history
+            prompt = system_prompt
+            
+            if conversation_history:
+                for message in conversation_history:
+                    role = message.get("role", "user")
+                    content = message.get("content", "")
+                    if role == "user":
+                        prompt += f"\n\nUser: {content}"
+                    elif role == "assistant":
+                        prompt += f"\n\nAssistant: {content}"
+                    else:
+                        prompt += f"\n\n{role.capitalize()}: {content}"
+                
+                # Add a prompt for the assistant to respond
+                prompt += "\n\nAssistant:"
+            
+            # Send the built prompt to the LLM
+            return self.query_llm(prompt)
+            
+        except Exception as e:
+            error_msg = f"Error in get_response: {str(e)}"
+            self.logger.error(error_msg)
+            return error_msg
+
     def query_llm(self, prompt: str) -> str:
         """Send a query to the LLM via API and return the response."""
         start_time = time.time()
@@ -62,4 +105,33 @@ class LLMService:
         except Exception as e:
             error_msg = f"Error querying LLM: {str(e)}"
             self.logger.error(error_msg)
-            return error_msg 
+            return error_msg
+
+    def get_embedding(self, text: str) -> List[float]:
+        """
+        Calculate the embedding for a given text using Ollama API.
+        
+        Args:
+            text: The text to embed
+            
+        Returns:
+            List[float]: A vector representation of the text
+        """
+        try:
+            # Initialize the Ollama client
+            ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+            client = OllamaClient(host=ollama_url)
+            
+            # Get the model to use for embeddings - use a default if not specified
+            model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+            
+            # Generate the embedding using the embeddings method
+            response = client.embeddings(model=model, prompt=text)
+            
+            # Extract the embedding vector from the response
+            embedding = response.embedding
+            
+            return embedding
+        except Exception as e:
+            self.logger.error(f"Error calculating embedding: {e}")
+            return [0.0] * 768  # Return zero vector on error with 768 dimensions 

@@ -21,6 +21,9 @@ from langgraph.types import interrupt
 # Remove duplicate imports and sys.path manipulation
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
+# Import tools
+from src.tools.orchestrator_tools import format_completed_tools_prompt
+
 # Import from state module instead of defining here
 from src.state.state_models import (
     MessageRole,
@@ -86,7 +89,7 @@ def main():
         
         print("Conversation history:")
         for message in manager.get_conversation_context():
-            logger.info(f"{message.role}: {message.content}")
+            logger.debug(f"{message.role}: {message.content}")
             
         # Test task management
         manager.set_task("Help the user")
@@ -94,7 +97,7 @@ def main():
         
         print("\nTask history:")
         for task in manager.get_task_history():
-            logger.info(f"- {task}")
+            logger.debug(f"- {task}")
             
         # Test agent state updates
         manager.update_agent_state("librarian", {"status": "ready"})
@@ -102,7 +105,7 @@ def main():
         
         print("\nAgent states:")
         for agent_id, state in manager.state['agent_states'].items():
-            logger.info(f"- {agent_id}: {state}")
+            logger.debug(f"- {agent_id}: {state}")
         
     except Exception as e:
         logger.error(f"Error: {e}")

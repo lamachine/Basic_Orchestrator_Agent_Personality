@@ -1,9 +1,22 @@
 """
-State management functionality for tracking conversation and agent state.
+State Manager Module - Central persistence and retrieval system for application state.
 
-This module provides the core state management functionality, including helper
-functions for creating and updating state, and the StateManager class for maintaining
-state consistency and validation.
+This module defines the StateManager class which provides a unified interface for 
+storing, retrieving, and manipulating application state, including:
+
+1. Conversation persistence - storing and retrieving conversation history and metadata
+2. Message management - adding, retrieving, and organizing messages within conversations
+3. Database abstraction - providing a clean interface to the underlying Supabase database
+4. State validation - ensuring data integrity through Pydantic models
+5. Transaction management - handling atomic operations for data consistency
+
+The StateManager is a critical infrastructure component used by the BaseAgent and its
+specialized implementations to maintain persistent state across sessions and 
+ensure data consistency throughout the application.
+
+This architecture centralizes all state operations, providing a single source of truth
+for the application state while isolating the details of the underlying database
+implementation from the rest of the application.
 """
 
 from typing import Dict, List, Any, Optional

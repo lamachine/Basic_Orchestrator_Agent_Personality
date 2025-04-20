@@ -4,7 +4,7 @@ import pytest
 import logging
 from unittest.mock import patch, Mock, MagicMock
 from datetime import datetime
-from src.agents.ai_agent import LLMQueryAgent, main
+from other_files_future_use.ai_agent_old import LLMQueryAgent, main
 from src.config import Configuration
 from src.services.db_services.db_manager import (
     ConversationState, 

@@ -33,6 +33,16 @@ class TaskStatus(str, Enum):
 class Message(BaseModel):
     """
     Represents a single message in a conversation with validation.
+    
+    In the system architecture:
+    - A 'Message' is the full object containing state changes passed around the system internally
+    - 'content' is the actual text/data being communicated (e.g., tool call details, 
+       database queries, LLM prompts, or LLM responses)
+    - 'content' is also the name of the database column in 'swarm_messages' table where
+       the actual message text/data is stored
+       
+    The 'content' field contains the most recent user input or system output, while the
+    full Message object contains metadata and state information for internal processing.
     """
     role: MessageRole
     content: str

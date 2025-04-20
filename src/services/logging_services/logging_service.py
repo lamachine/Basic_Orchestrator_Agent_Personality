@@ -3,6 +3,7 @@ import os
 from typing import Dict, Optional, Any
 from src.config import Configuration
 from src.config.logging_config import setup_logging, get_log_config
+from src.services.logging_services.http_logging import configure_http_client_logging
 
 class LoggingService:
     """
@@ -31,6 +32,9 @@ class LoggingService:
         self.handlers = None
         self.initialized = False
         self.loggers = {}  # Cache of configured loggers
+        
+        # Configure HTTP client logging
+        self.http_loggers = configure_http_client_logging()
         
         # Initialize logging
         self.setup_logging()
@@ -93,7 +97,7 @@ class LoggingService:
         self.log_config['special_loggers'] = special_loggers
         
         # Log the change
-        self.logger.info(f"Changed log level for {name} to {level}")
+        self.logger.debug(f"Changed log level for {name} to {level}")
         
     def get_all_loggers(self) -> Dict[str, int]:
         """

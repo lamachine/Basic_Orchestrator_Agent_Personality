@@ -20,18 +20,29 @@ logger = logging.getLogger(__name__)
 # Import orchestrator's database manager
 from src.services.db_services.db_manager import DatabaseManager
 
-# Global LLM instance will be set on initialization
+# Import LLMService directly
+from src.services.llm_services.llm_service import LLMService
+
+# Global LLM service and agent for embedding generation
+llm_service = None
 llm_agent = None
 
 def set_llm_agent(agent):
     """Set the LLM agent for embedding generation."""
-    global llm_agent
+    global llm_agent, llm_service
     llm_agent = agent
-    logger.debug("LLM agent set for GitHub adapter")
+    
+    # Initialize LLM service if not already available
+    if llm_service is None:
+        ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+        embedding_model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+        llm_service = LLMService(ollama_url, embedding_model)
+    
+    logger.debug("LLM agent and service set for GitHub adapter")
 
 def get_embedding(text: str) -> List[float]:
     """
-    Get embedding vector for text using orchestrator's LLM interface.
+    Get embedding vector for text using LLMService.
     
     Args:
         text: Text to embed
@@ -39,14 +50,17 @@ def get_embedding(text: str) -> List[float]:
     Returns:
         Embedding vector as a list of floats
     """
-    if llm_agent is None:
-        logger.warning("LLM agent not set, using dummy embedding")
-        return [0.0] * 768  # Return dummy embedding
+    global llm_service
+    
+    # Initialize LLM service if not already available
+    if llm_service is None:
+        ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+        embedding_model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+        llm_service = LLMService(ollama_url, embedding_model)
         
     try:
-        # Use orchestrator's LLM to get embeddings
-        # This needs to be adjusted based on how your orchestrator gets embeddings
-        embedding = llm_agent.db.calculate_embedding(text)
+        # Use LLMService to get embeddings directly
+        embedding = llm_service.get_embedding(text)
         return embedding
     except Exception as e:
         logger.error(f"Error getting embedding: {e}")

@@ -589,7 +589,7 @@ async def build_agent(ctx: Context, spec: str) -> str:
     - [x] Refactor ai_agent to use BaseAgent
     - [x] TEST - from CLI at least, but maybe from pytest as well.
     - [x] Refactor one of the agents (probably librarian) to use the base class.
-    - [ ] Add a canned response to librarian_tool and test orchestrator->librarian_tool call
+    - [x] Add a canned response to librarian_tool and test orchestrator->librarian_tool call
     - [ ] Update librarian_tool to delegate to LibrarianAgent and test
     - [ ] Register RAG/crawl tools in LibrarianAgent and test end-to-end
     - [ ] Give librarian db RAG search tools and existing crawl tools.
@@ -627,3 +627,85 @@ Let's work through this checklist step by step!
     - [ ] Add comprehensive logging and metadata for all async tool/agent calls and results
 
 # (Rest of your TODO list continues below...)
+
+## AI Agent Refactoring Checklist
+
+### Phase 1: Setup and Structural Preparation
+- [x] Create backup of `ai_agent.py` (as `ai_agent0417.py.bak`)
+- [x] Identify empty/unused directories to remove (`states/` removed, `db/` retained for database schemas)
+- [x] Create necessary new directories:
+  - [x] `src/ui/interfaces/` for interface implementations
+  - [x] `src/ui/adapters/` for IO adapters
+
+### Phase 2: Code Extraction and Modularization
+- [x] Create core agent module (`src/agents/llm_query_agent.py`):
+  - [x] Extract core `LLMQueryAgent` class
+  - [x] Remove UI-specific code
+  - [x] Focus on core orchestration and LLM interaction
+  - [x] Simplify to maintain single responsibility
+  
+- [x] Create interface framework (`src/ui/interface.py`):
+  - [x] Define abstract base classes for all interface types
+  - [x] Extract common UI utilities
+  - [x] Implement standard I/O formatting
+
+- [x] Create interface implementations:
+  - [x] `src/ui/cli.py` - Extract CLI-specific code
+  - [ ] `src/ui/api_server.py` - For MCP connections
+  - [ ] `src/ui/web.py` - For Streamlit/web integration
+  - [ ] `src/ui/graph_adapter.py` - For sub-graph integration
+
+- [x] Create I/O adapters (`src/ui/adapters/io_adapter.py`):
+  - [x] Abstract non-blocking input (Windows/Unix)
+  - [x] Extract terminal display utilities
+  - [x] Create platform-specific handlers
+
+- [x] Extract tool processing (`src/tools/tool_processor.py`):
+  - [x] Move `process_completed_tool_request()`
+  - [x] Create cleaner tool result processing
+  - [x] Normalize response formats
+
+### Phase 3: Main Application Entry Points
+- [x] Create simple main module (`src/main.py`):
+  - [x] Minimal dependencies
+  - [x] Configuration loading
+  - [x] Service initialization
+  - [x] Interface selection
+  
+- [x] Create specific entry points:
+  - [x] `src/run_cli.py` - CLI-specific launcher
+  - [ ] `src/run_server.py` - Server mode launcher
+  - [ ] `src/run_web.py` - Web UI launcher
+
+### Phase 4: Testing and Documentation
+- [x] Create unit tests for extracted components:
+  - [x] Test core agent functionality
+  - [x] Test each interface implementation
+  - [x] Test tool processing
+  - [x] Test I/O adapters
+  
+- [x] Update documentation:
+  - [x] Add docstrings to all new modules
+  - [x] Create README.md for each new directory
+  - [x] Update main README with new structure
+
+### Phase 5: Integration and Cleanup
+- [ ] Integrate all components:
+  - [ ] Test core agent with each interface
+  - [ ] Verify tool processing works with all interfaces
+  - [ ] Ensure state is properly maintained
+  
+- [ ] Clean up codebase:
+  - [ ] Remove duplicate code
+  - [ ] Standardize naming conventions
+  - [ ] Review and update docstrings for consistency and completeness
+  - [ ] Delete backup and unused files
+  - [ ] Remove empty directories
+
+
+  Next steps for cleanup might include:
+Remove backup files: Files like ai_agent0417.py.bak and ai_agent0412.py.bak can likely be deleted since we've migrated their functionality.
+Update documentation: Ensure README and docs reflect the new modular structure.
+Update any import statements: Check if any other files are still importing from the old ai_agent.py and update them.
+Review TODOs: Check for any TODOs in the code that should be addressed.
+Check test coverage: Ensure tests cover the refactored code properly, particularly around the CLI interface and tool processing.

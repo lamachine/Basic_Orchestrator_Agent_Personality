@@ -84,19 +84,29 @@ def mock_create_client():
 @pytest.fixture
 def mock_ollama_client():
     """Create a mock OllamaClient."""
-    with patch('src.services.db_services.db_manager.OllamaClient') as mock:
+    with patch('src.services.llm_services.llm_service.OllamaClient') as mock:
         mock_instance = MagicMock()
         mock.return_value = mock_instance
         
         # Mock embeddings method
-        mock_instance.embeddings.return_value = {
-            "embedding": [0.1] * 768
-        }
+        mock_instance.embeddings.return_value = MagicMock(embedding=[0.1] * 768)
         
         yield mock_instance
 
 @pytest.fixture
-def db_manager(mock_supabase, mock_create_client, mock_ollama_client):
+def mock_llm_service():
+    """Create a mock LLMService."""
+    with patch('src.services.db_services.db_manager.LLMService') as mock:
+        mock_instance = MagicMock()
+        mock.return_value = mock_instance
+        
+        # Mock get_embedding method
+        mock_instance.get_embedding.return_value = [0.1] * 768
+        
+        yield mock_instance
+
+@pytest.fixture
+def db_manager(mock_supabase, mock_create_client, mock_llm_service):
     """Create a database manager with mock dependencies."""
     mock_create_client.return_value = mock_supabase
     
@@ -368,39 +378,45 @@ def test_invalid_task_status_transition(db_manager, mock_supabase):
     db_manager.save_conversation.assert_not_called()
 
 def test_add_message(db_manager, mock_supabase):
-    """Test adding a message."""
-    # Call add_message
+    """Test adding a message to a conversation."""
+    # Set up mock for insert
+    mock_insert = MagicMock()
+    mock_supabase.table.return_value.insert.return_value = mock_insert
+    mock_insert.execute.return_value = MagicMock()
+    
+    # Mock calculate_embedding (it's tested separately)
+    db_manager.llm_service.get_embedding = MagicMock(return_value=[0.1] * 768)
+    
+    # Call the method
     request_id = db_manager.add_message(
-        "123",
-        "user",
-        "Hello, world!",
-        metadata={"user_id": "developer"},
-        embedding=None,
-        request_id=None
+        session_id=123,
+        role="user",
+        message="Hello, world!",
+        user_id="developer"
     )
     
-    # Verify the embedding was calculated
-    mock_supabase.table.assert_called_with('messages')
-    mock_supabase.table().insert.assert_called_once()
-    
-    # Verify the insert parameters
-    insert_args = mock_supabase.table().insert.call_args[0][0]
-    assert insert_args['session_id'] == "123"
-    assert insert_args['role'] == "user"
+    # Verify the message was added with correct parameters
+    mock_supabase.table.assert_called_with("swarm_messages")
+    insert_args = mock_supabase.table.return_value.insert.call_args[0][0]
+    assert insert_args['session_id'] == 123
+    assert insert_args['sender'] == "orchestrator_graph.cli"
+    assert insert_args['target'] == "orchestrator_graph.llm"
+    assert insert_args['content'] == "Hello, world!"
+    assert insert_args['user_id'] == "developer"
+    assert 'embedding_nomic' in insert_args
     assert insert_args['message'] == "Hello, world!"
     assert json.loads(insert_args['metadata'])['user_id'] == "developer"
     assert 'embedding_nomic' in insert_args
 
-def test_calculate_embedding(db_manager, mock_ollama_client):
-    """Test calculating embeddings."""
-    embedding = db_manager.calculate_embedding("Test message")
-    
-    # Verify the Ollama client was used correctly
-    mock_ollama_client.embeddings.assert_called_once_with(
-        model="nomic-embed-text",
-        prompt="Test message"
+def test_get_embedding(mock_llm_service, db_manager):
+    """Test getting embeddings through the LLMService."""
+    # Test that the database manager uses the LLM service for embeddings
+    db_manager.add_message(
+        session_id=1,
+        role="user",
+        message="Test message",
+        user_id="test-user"
     )
     
-    # Verify the embedding was returned
-    assert len(embedding) == 768
-    assert embedding[0] == 0.1  # From our mock 
+    # Verify the LLM service was called correctly
+    mock_llm_service.return_value.get_embedding.assert_called_with("Test message") 

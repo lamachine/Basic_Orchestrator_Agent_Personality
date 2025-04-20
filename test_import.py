@@ -2,7 +2,7 @@ import traceback
 
 try:
     print("Attempting to import...")
-    from src.agents.ai_agent import LLMQueryAgent
+    from other_files_future_use.ai_agent_old import LLMQueryAgent
     print("Import successful!")
     
     print("Attempting to initialize agent...")

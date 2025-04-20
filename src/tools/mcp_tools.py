@@ -252,7 +252,7 @@ def check_completed_mcp_requests():
     This function should be called periodically to check for completed MCP requests
     and update the orchestrator's pending tool requests.
     """
-    from src.agents.orchestrator_tools import PENDING_TOOL_REQUESTS
+    from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS
     
     try:
         # Look for completed MCP requests

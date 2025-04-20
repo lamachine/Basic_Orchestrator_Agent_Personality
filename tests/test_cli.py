@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from src.ui.cli.cli import main
+from other_files_future_use.cli_old import main
 
 
 def test_cli_start_new_conversation():
