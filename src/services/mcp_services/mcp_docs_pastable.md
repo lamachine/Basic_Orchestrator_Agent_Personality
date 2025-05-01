@@ -7368,13 +7368,13 @@ The client provides both synchronous and asynchronous APIs for flexibility in di
             .build())
         .sampling(request -> Mono.just(new CreateMessageResult(response)))
         .toolsChangeConsumer(tools -> Mono.fromRunnable(() -> {
-            logger.info("Tools updated: {}", tools);
+            logger.debug("Tools updated: {}", tools);
         }))
         .resourcesChangeConsumer(resources -> Mono.fromRunnable(() -> {
-            logger.info("Resources updated: {}", resources);
+            logger.debug("Resources updated: {}", resources);
         }))
         .promptsChangeConsumer(prompts -> Mono.fromRunnable(() -> {
-            logger.info("Prompts updated: {}", prompts);
+            logger.debug("Prompts updated: {}", prompts);
         }))
         .build();
 
@@ -7899,20 +7899,20 @@ The server supports both synchronous and asynchronous APIs, allowing for flexibl
 
     // Register tools, resources, and prompts
     asyncServer.addTool(asyncToolSpecification)
-        .doOnSuccess(v -> logger.info("Tool registered"))
+        .doOnSuccess(v -> logger.debug("Tool registered"))
         .subscribe();
 
     asyncServer.addResource(asyncResourceSpecification)
-        .doOnSuccess(v -> logger.info("Resource registered"))
+        .doOnSuccess(v -> logger.debug("Resource registered"))
         .subscribe();
 
     asyncServer.addPrompt(asyncPromptSpecification)
-        .doOnSuccess(v -> logger.info("Prompt registered"))
+        .doOnSuccess(v -> logger.debug("Prompt registered"))
         .subscribe();
 
     // Close the server when done
     asyncServer.close()
-        .doOnSuccess(v -> logger.info("Server closed"))
+        .doOnSuccess(v -> logger.debug("Server closed"))
         .subscribe();
     ```
   </Tab>

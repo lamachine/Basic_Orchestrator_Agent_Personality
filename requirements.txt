@@ -4,5 +4,13 @@ supabase
 psycopg2-binary
 pgvector
 pydantic
+pydantic-settings>=2.1.0
+pydantic-extra-types>=2.1.0
 langgraph
-supabase
+
+# Testing dependencies
+pytest
+pytest-asyncio
+
+# Personal Assistant sub-graph dependencies
+-r src/sub_graph_personal_assistant/requirements.txt

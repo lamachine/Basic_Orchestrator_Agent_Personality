@@ -8,15 +8,13 @@ operating systems.
 
 import os
 import sys
-import time
-import logging
-from typing import Optional, Callable, Any
+from typing import Optional
+from abc import ABC, abstractmethod
 
-# Setup logging
-from src.services.logging_services.logging_service import get_logger
+from src.services.logging_service import get_logger
 logger = get_logger(__name__)
 
-class InputAdapter:
+class InputAdapter(ABC):
     """
     Abstract base class for input adapters.
     
@@ -24,6 +22,7 @@ class InputAdapter:
     allowing them to be used interchangeably.
     """
     
+    @abstractmethod
     def read_char(self) -> Optional[str]:
         """
         Read a single character of input, non-blocking.
@@ -31,8 +30,9 @@ class InputAdapter:
         Returns:
             The character read, or None if no input is available
         """
-        raise NotImplementedError("Subclasses must implement read_char")
+        pass
     
+    @abstractmethod
     def read_line(self) -> str:
         """
         Read a full line of input, blocking until Enter is pressed.
@@ -40,7 +40,7 @@ class InputAdapter:
         Returns:
             The line read
         """
-        raise NotImplementedError("Subclasses must implement read_line")
+        pass
 
 class WindowsInputAdapter(InputAdapter):
     """Input adapter for Windows systems."""
@@ -96,8 +96,6 @@ class UnixInputAdapter(InputAdapter):
         self.select = select
         self.termios = termios
         self.tty = tty
-        
-        # Save terminal settings
         self.fd = sys.stdin.fileno()
         self.old_settings = termios.tcgetattr(self.fd)
     
@@ -109,16 +107,12 @@ class UnixInputAdapter(InputAdapter):
             The character read, or None if no input is available
         """
         try:
-            # Use select to check if input is available
             if self.select.select([sys.stdin], [], [], 0)[0]:
-                # Set terminal to raw mode
                 self.tty.setraw(self.fd)
                 char = sys.stdin.read(1)
                 return char
         finally:
-            # Restore terminal settings
             self.termios.tcsetattr(self.fd, self.termios.TCSADRAIN, self.old_settings)
-        
         return None
     
     def read_line(self) -> str:
@@ -128,7 +122,6 @@ class UnixInputAdapter(InputAdapter):
         Returns:
             The line read
         """
-        # Use Python's built-in input function, which works on all platforms
         return input()
 
 def get_input_adapter() -> InputAdapter:
@@ -138,35 +131,89 @@ def get_input_adapter() -> InputAdapter:
     Returns:
         An InputAdapter instance for the current platform
     """
-    if os.name == 'nt':  # Windows
+    if os.name == 'nt':
         try:
             return WindowsInputAdapter()
         except ImportError:
             logger.warning("Failed to import msvcrt. Falling back to default input")
-    else:  # Unix/Linux/MacOS
+    else:
         try:
             return UnixInputAdapter()
         except ImportError:
             logger.warning("Failed to import Unix-specific modules. Falling back to default input")
-    
-    # If we get here, we couldn't create a platform-specific adapter
-    # Fall back to a simple adapter that uses input() and doesn't do non-blocking
     class FallbackInputAdapter(InputAdapter):
         def read_char(self) -> Optional[str]:
-            return None  # Non-blocking not supported
-        
+            return None
         def read_line(self) -> str:
             return input()
-    
     return FallbackInputAdapter()
 
-class OutputAdapter:
+class OutputAdapter(ABC):
     """
-    Adapter for output operations.
+    Abstract base class for output operations.
     
-    This class provides methods for displaying text output in a
+    This class defines the interface for displaying text output in a
     platform-independent way.
     """
+    
+    @abstractmethod
+    def write(self, text: str) -> None:
+        """
+        Write text to the output.
+        
+        Args:
+            text: The text to write
+        """
+        pass
+    
+    @abstractmethod
+    def clear_line(self) -> None:
+        """
+        Clear the current line of output.
+        """
+        pass
+    
+    @abstractmethod
+    def move_cursor(self, x: int, y: int) -> None:
+        """
+        Move the cursor to the specified position.
+        
+        Args:
+            x: The column to move to
+            y: The row to move to
+        """
+        pass
+    
+    @abstractmethod
+    def set_title(self, title: str) -> None:
+        """
+        Set the title of the terminal window.
+        
+        Args:
+            title: The new title
+        """
+        pass
+    
+    @abstractmethod
+    def set_color(self, foreground: int, background: int = None) -> None:
+        """
+        Set the text color.
+        
+        Args:
+            foreground: The foreground color code
+            background: The background color code (optional)
+        """
+        pass
+    
+    @abstractmethod
+    def reset_color(self) -> None:
+        """
+        Reset the text color to default.
+        """
+        pass
+
+class TerminalOutputAdapter(OutputAdapter):
+    """Concrete implementation of OutputAdapter for terminal output."""
     
     def write(self, text: str) -> None:
         """
@@ -180,10 +227,10 @@ class OutputAdapter:
     
     def clear_line(self) -> None:
         """Clear the current line of output."""
-        if os.name == 'nt':  # Windows
-            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Erase the line
-        else:  # Unix/Linux/MacOS
-            sys.stdout.write('\033[2K\r')  # ANSI escape sequence to clear line
+        if os.name == 'nt':
+            sys.stdout.write('\r' + ' ' * 80 + '\r')
+        else:
+            sys.stdout.write('\033[2K\r')
         sys.stdout.flush()
     
     def move_cursor(self, x: int, y: int) -> None:
@@ -194,7 +241,7 @@ class OutputAdapter:
             x: The column to move to
             y: The row to move to
         """
-        if os.name != 'nt':  # This only works on Unix/Linux/MacOS
+        if os.name != 'nt':
             sys.stdout.write(f"\033[{y};{x}H")
             sys.stdout.flush()
     
@@ -205,10 +252,10 @@ class OutputAdapter:
         Args:
             title: The new title
         """
-        if os.name == 'nt':  # Windows
+        if os.name == 'nt':
             import ctypes
             ctypes.windll.kernel32.SetConsoleTitleW(title)
-        else:  # Unix/Linux/MacOS
+        else:
             sys.stdout.write(f"\033]0;{title}\007")
             sys.stdout.flush()
     
@@ -220,7 +267,7 @@ class OutputAdapter:
             foreground: The foreground color code
             background: The background color code (optional)
         """
-        if os.name != 'nt':  # This only works on Unix/Linux/MacOS with ANSI support
+        if os.name != 'nt':
             if background is not None:
                 sys.stdout.write(f"\033[{foreground};{background}m")
             else:
@@ -229,6 +276,6 @@ class OutputAdapter:
     
     def reset_color(self) -> None:
         """Reset the text color to default."""
-        if os.name != 'nt':  # This only works on Unix/Linux/MacOS with ANSI support
+        if os.name != 'nt':
             sys.stdout.write("\033[0m")
             sys.stdout.flush() 

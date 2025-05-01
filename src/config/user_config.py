@@ -13,6 +13,10 @@ import yaml
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List
+from src.config.llm_config import get_llm_config
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Default configuration file paths to check
 DEFAULT_CONFIG_PATHS = [
@@ -32,52 +36,6 @@ DEFAULT_CONFIG = {
         'backup_count': 5,          # Number of backup log files to keep
     },
     
-    # LLM configuration
-    'llm': {
-        'provider': 'ollama',       # Primary LLM provider: ollama, openai, anthropic, etc.
-        'api_url': 'http://localhost:11434',  # API endpoint for the provider
-        
-        # Default model settings (used as fallback)
-        'default_model': 'llama3.1:latest',
-        'temperature': 0.7,
-        'max_tokens': 2048,
-        'context_window': 8192,
-        
-        # Purpose-specific models and settings
-        'models': {
-            # Conversation model (for chat, general interactions)
-            'conversation': {
-                'model': 'llama3.1:latest',
-                'temperature': 0.7,
-                'max_tokens': 2048,
-                'system_prompt': 'You are a helpful assistant named Ronan.'
-            },
-            
-            # Coding model (for code generation, analysis)
-            'coding': {
-                'model': 'codellama:latest',
-                'temperature': 0.2,  # Lower temperature for more precise code
-                'max_tokens': 4096,  # Larger output for code generation
-                'system_prompt': 'You are an expert programming assistant.'
-            },
-            
-            # Reasoning model (for complex problem-solving)
-            'reasoning': {
-                'model': 'deepseek-r1',
-                'temperature': 0.3,  # Lower for more logical outputs
-                'max_tokens': 4096,
-                'system_prompt': 'You are a logical reasoning assistant that thinks step by step.'
-            },
-            
-            # Vector encoding model (for embeddings)
-            'embedding': {
-                'model': 'nomic-embed-text',  # For creating vector embeddings
-                'dimensions': 768,            # Embedding dimensions
-                'normalize': True             # Whether to normalize vectors
-            }
-        }
-    },
-    
     # Orchestrator graph configuration
     'orchestrator': {
         'graph_type': 'standard',          # Type of orchestrator graph to use
@@ -95,7 +53,7 @@ DEFAULT_CONFIG = {
         'service_role_key': '',     # Supabase service role key (leave empty to use env var)
     },
     
-    # Agent configuration
+    # Functional agents configuration
     'agents': {
         'enabled': ['librarian', 'valet', 'personal_assistant'],  # Enabled agents
         # Agent-specific configuration
@@ -116,6 +74,13 @@ DEFAULT_CONFIG = {
         'debug_mode': False,        # Enable debug mode
         'user_id': 'developer',     # Default user ID
         'session_timeout_minutes': 30,  # Session timeout in minutes
+    },
+    
+    # Personality agent settings
+    'personality': {
+        'enabled': True,                                                     # Whether to use personality
+        'file_path': os.path.abspath('src/agents/Character_Ronan_valet_orchestrator.json'),   # Path to personality file
+        'use_by_default': True                                               # Use personality by default for all sessions
     }
 }
 
@@ -188,12 +153,12 @@ class UserConfig:
                         else:
                             config[section] = values
                 
-                print(f"Loaded configuration from {self.config_path}")
+                logger.debug(f"user_config:_load_config: Loaded configuration from {self.config_path}")
             except Exception as e:
-                print(f"Error loading configuration from {self.config_path}: {e}")
-                print("Using default configuration")
+                logger.debug(f"user_config:_load_config: Error loading configuration from {self.config_path}: {e}")
+                logger.debug("user_config:_load_config: Using default configuration")
         else:
-            print("No configuration file found, using defaults")
+            logger.debug("user_config:_load_config: No configuration file found, using defaults")
             # Create a default configuration file
             self._create_default_config()
             
@@ -225,10 +190,10 @@ class UserConfig:
                 # Dump the configuration with comments
                 yaml.dump(DEFAULT_CONFIG, f, default_flow_style=False, sort_keys=False)
                 
-            print(f"Created default configuration file at {default_path}")
+            logger.debug(f"Created default configuration file at {default_path}")
             self.config_path = default_path
         except Exception as e:
-            print(f"Error creating default configuration file: {e}")
+            logger.debug(f"Error creating default configuration file: {e}")
     
     def get(self, section: str, key: Optional[str] = None, default: Any = None) -> Any:
         """
@@ -276,7 +241,7 @@ class UserConfig:
                     yaml.dump(self.config, f, default_flow_style=False)
                 return True
             except Exception as e:
-                print(f"Error saving configuration: {e}")
+                logger.debug(f"Error saving configuration: {e}")
                 return False
         
         return False
@@ -292,12 +257,11 @@ class UserConfig:
         
     def get_llm_config(self) -> Dict[str, Any]:
         """
-        Get LLM configuration.
-        
+        Get LLM configuration from the single source of truth.
         Returns:
             Dictionary with LLM configuration
         """
-        return self.config.get('llm', {})
+        return get_llm_config().dict()
         
     def get_database_config(self) -> Dict[str, Any]:
         """
@@ -324,6 +288,15 @@ class UserConfig:
             return agents_config.get(agent_name, {})
             
         return agents_config
+        
+    def get_personality_config(self) -> Dict[str, Any]:
+        """
+        Get personality configuration.
+        
+        Returns:
+            Dictionary with personality configuration
+        """
+        return self.config.get('personality', {})
         
     def to_dict(self) -> Dict[str, Any]:
         """

@@ -133,5 +133,20 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgements
 
-- Thanks to the Ollama team for the local LLM runtime
 - Inspired by various agent frameworks in the LLM ecosystem 
+
+## Database Architecture
+
+The project uses a layered database architecture that follows clean code principles:
+
+1. **DatabaseService** - A stateless service layer for raw database operations
+2. **Component Managers** - Domain-specific managers for messages and conversations
+3. **DatabaseManager** - A high-level coordinator that provides a unified API
+
+This architecture enables:
+- Clear separation of concerns
+- Composition over inheritance
+- Better testability with mock objects
+- Consistent error handling
+
+See [Database Architecture](docs/database_architecture.md) for detailed documentation. 

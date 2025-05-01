@@ -1,0 +1,4 @@
+enabled_tools:
+  - valet_agent
+  - personal_assistant_agent
+  - librarian_agent 

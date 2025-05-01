@@ -18,13 +18,13 @@ class StateValidator:
     def validate_task_transition(current_status: TaskStatus, new_status: TaskStatus) -> bool:
         """
         Validate if a task status transition is allowed.
-        
+
         Args:
-            current_status: The current task status
-            new_status: The proposed new task status
-            
+            current_status (TaskStatus): The current task status
+            new_status (TaskStatus): The proposed new task status
+
         Returns:
-            True if the transition is valid, False otherwise
+            bool: True if the transition is valid, False otherwise
         """
         valid_transitions = {
             TaskStatus.PENDING: [TaskStatus.IN_PROGRESS, TaskStatus.FAILED],
@@ -38,12 +38,12 @@ class StateValidator:
     def validate_message_sequence(messages: List[Message]) -> bool:
         """
         Validate message sequence for consistency.
-        
+
         Args:
-            messages: List of messages to validate
-            
+            messages (List[Message]): List of messages to validate
+
         Returns:
-            True if the messages are in chronological order, False otherwise
+            bool: True if the messages are in chronological order, False otherwise
         """
         if not messages:
             return True
@@ -54,13 +54,13 @@ class StateValidator:
     def validate_agent_state(agent_id: str, state: Dict[str, Any]) -> bool:
         """
         Validate agent state structure.
-        
+
         Args:
-            agent_id: The ID of the agent
-            state: The agent state to validate
-            
+            agent_id (str): The ID of the agent
+            state (Dict[str, Any]): The agent state to validate
+
         Returns:
-            True if the state has all required fields, False otherwise
+            bool: True if the state has all required fields, False otherwise
         """
         required_fields = {'status'}
         return all(field in state for field in required_fields) 

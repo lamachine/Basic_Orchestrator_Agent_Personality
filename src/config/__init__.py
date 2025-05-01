@@ -4,9 +4,14 @@ import os
 import logging
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+from src.config.llm_config import get_llm_config, LLMConfig
+from src.config.user_config import get_user_config, UserConfig
 
 # Load environment variables
 load_dotenv(override=True)
+
+# Set up basic logging directly, avoiding circular imports
+logger = logging.getLogger(__name__)
 
 # Import will be available after creating user_config.py
 try:
@@ -14,80 +19,42 @@ try:
     HAS_USER_CONFIG = True
 except ImportError:
     HAS_USER_CONFIG = False
+    logger.debug("No user_config.py found. Using default configuration.")
 
 class Configuration:
-    """Base configuration class for the application."""
-    def __init__(self, **kwargs):
-        # Try to load user config if available
-        self.user_config = None
-        if HAS_USER_CONFIG:
-            try:
-                self.user_config = get_user_config()
-                print(f"Loaded user configuration from {self.user_config.config_path}")
-            except Exception as e:
-                print(f"Error loading user configuration: {e}")
-                
-        # Logging configuration with defaults from user config or env vars
-        if self.user_config:
-            log_config = self.user_config.get_logging_config()
-            self.file_level = kwargs.get('file_level', log_config.get('file_level', os.getenv('FILE_LOG_LEVEL', 'DEBUG')))
-            self.console_level = kwargs.get('console_level', log_config.get('console_level', os.getenv('CONSOLE_LOG_LEVEL', 'INFO')))
-        else:
-            self.file_level = kwargs.get('file_level', os.getenv('FILE_LOG_LEVEL', 'DEBUG'))
-            self.console_level = kwargs.get('console_level', os.getenv('CONSOLE_LOG_LEVEL', 'INFO'))
-        
-        # Database configuration from user config or env vars
-        if self.user_config:
-            db_config = self.user_config.get_database_config()
-            self.supabase_url = kwargs.get('supabase_url', db_config.get('url') or os.getenv('SUPABASE_URL'))
-            self.supabase_anon_key = kwargs.get('supabase_anon_key', db_config.get('anon_key') or os.getenv('SUPABASE_ANON_KEY'))
-            self.supabase_service_role_key = kwargs.get('supabase_service_role_key', 
-                                                      db_config.get('service_role_key') or os.getenv('SUPABASE_SERVICE_ROLE_KEY'))
-        else:
-            self.supabase_url = kwargs.get('supabase_url', os.getenv('SUPABASE_URL'))
-            self.supabase_anon_key = kwargs.get('supabase_anon_key', os.getenv('SUPABASE_ANON_KEY'))
-            self.supabase_service_role_key = kwargs.get('supabase_service_role_key', 
-                                                      os.getenv('SUPABASE_SERVICE_ROLE_KEY'))
-        
-        # LLM configuration from user config or env vars
-        if self.user_config:
-            llm_config = self.user_config.get_llm_config()
-            self.ollama_api_url = kwargs.get('ollama_api_url', llm_config.get('api_url') or os.getenv('OLLAMA_API_URL', 'http://localhost:11434'))
-            self.ollama_model = kwargs.get('ollama_model', llm_config.get('default_model') or os.getenv('OLLAMA_MODEL', 'llama3.1:latest'))
-            
-            # Additional LLM settings from user config
-            self.llm_temperature = llm_config.get('temperature', 0.7)
-            self.llm_max_tokens = llm_config.get('max_tokens', 2048)
-            self.llm_context_window = llm_config.get('context_window', 8192)
-            
-            # Purpose-based model settings
-            self.llm_models = llm_config.get('models', {})
-        else:
-            self.ollama_api_url = kwargs.get('ollama_api_url', os.getenv('OLLAMA_API_URL', 'http://localhost:11434'))
-            self.ollama_model = kwargs.get('ollama_model', os.getenv('OLLAMA_MODEL', 'llama3.1:latest'))
-            
-            # Default values for additional LLM settings
-            self.llm_temperature = 0.7
-            self.llm_max_tokens = 2048
-            self.llm_context_window = 8192
-            self.llm_models = {}
-        
-        # Runtime configuration from user config or env vars
-        if self.user_config:
-            general_config = self.user_config.get('general') or {}
-            self.debug_mode = kwargs.get('debug_mode', general_config.get('debug_mode', False) or os.getenv('DEBUG_MODE', 'False').lower() == 'true')
-            self.user_id = general_config.get('user_id', 'developer')
-            self.session_timeout_minutes = general_config.get('session_timeout_minutes', 30)
-        else:
-            self.debug_mode = kwargs.get('debug_mode', os.getenv('DEBUG_MODE', 'False').lower() == 'true')
-            self.user_id = 'developer'
-            self.session_timeout_minutes = 30
-        
-        # Agent configuration
-        if self.user_config:
-            self.agent_config = self.user_config.get('agents') or {}
-        else:
-            self.agent_config = {}
+    """Unified configuration for the orchestrator system."""
+    def __init__(self):
+        self.llm = get_llm_config()
+        self.user_config = get_user_config()
+        # Expose personality settings
+        personality_cfg = self.user_config.get_personality_config()
+        self.personality_enabled = personality_cfg.get('enabled', True)
+        self.personality_file_path = personality_cfg.get('file_path', None)
+        # Add any other global settings as needed
+
+    @property
+    def ollama_api_url(self):
+        return self.llm.api_url
+
+    @property
+    def ollama_model(self):
+        return self.llm.default_model
+
+    @property
+    def llm_temperature(self):
+        return self.llm.temperature
+
+    @property
+    def llm_max_tokens(self):
+        return self.llm.max_tokens
+
+    @property
+    def llm_context_window(self):
+        return self.llm.context_window
+
+    @property
+    def llm_models(self):
+        return self.llm.models
 
     def get_agent_config(self, agent_name: str) -> Dict[str, Any]:
         """Get configuration for a specific agent."""
@@ -136,7 +103,7 @@ class Configuration:
         """String representation of configuration."""
         # Hide sensitive values
         safe_dict = self.to_dict()
-        for key in ['supabase_anon_key', 'supabase_service_role_key']:
+        for key in ['supabase_anon_key', 'supabase_key', 'supabase_service_role_key']:
             if key in safe_dict and safe_dict[key]:
                 safe_dict[key] = '***REDACTED***'
         return f"Configuration({safe_dict})"

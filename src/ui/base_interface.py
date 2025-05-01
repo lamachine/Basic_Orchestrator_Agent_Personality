@@ -18,7 +18,7 @@ from src.tools.orchestrator_tools import check_completed_tool_requests, PENDING_
 from src.utils.datetime_utils import timestamp, now
 
 # Setup logging
-from src.services.logging_services.logging_service import get_logger
+from src.services.logging_service import get_logger
 logger = get_logger(__name__)
 
 class BaseUserInterface(ABC):
@@ -27,7 +27,10 @@ class BaseUserInterface(ABC):
     
     This class defines the interface that all UI implementations must follow,
     ensuring consistent interaction patterns regardless of the specific UI 
-    (CLI, web, API, etc.).
+    (CLI, web, API, etc).
+    
+    Standard interface class for user interactions with the agent.
+    This class provides common implementation details for all interface types (CLI, web, API, etc).
     """
     
     def __init__(self, agent):

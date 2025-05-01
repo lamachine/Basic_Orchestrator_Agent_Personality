@@ -1,0 +1,22 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir mem0ai
+
+# Copy service code
+COPY src/services/mcp_services/mcp_mem0_service.py /app/service.py
+
+# Environment variables
+ENV MEM0_API_KEY=""
+ENV SUPABASE_URL=""
+ENV SUPABASE_KEY=""
+
+# Expose the port
+EXPOSE 8000
+
+# Run the service
+CMD ["python", "service.py", "--http", "--port", "8000"] 

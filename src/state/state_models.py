@@ -12,6 +12,9 @@ from typing_extensions import TypedDict
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.services.logging_service import get_logger
+logger = get_logger(__name__)
+
 class MessageRole(str, Enum):
     """
     Enumeration of possible message roles in a conversation.
@@ -53,14 +56,9 @@ class Message(BaseModel):
     @classmethod
     def content_not_empty(cls, v: str) -> str:
         """Validate that message content is not empty."""
-        # Trim whitespace to prevent spaces-only messages
         trimmed = v.strip() if isinstance(v, str) else ''
-        
-        # Check if the content is empty after trimming
         if not trimmed:
             raise ValueError('Content cannot be empty')
-            
-        # Return the trimmed content
         return trimmed
 
     @field_validator('metadata')
@@ -69,18 +67,16 @@ class Message(BaseModel):
         """Ensure metadata is a dictionary."""
         return v or {}
 
-class ConversationState(BaseModel):
+class MessageState(BaseModel):
     """
-    Represents the state of a conversation including messages and task status.
+    Represents the state of a session's messages and task status.
     """
-    conversation_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: int
     messages: List[Message] = Field(default_factory=list)
+    current_task: Optional[str] = None
+    current_task_status: Optional[TaskStatus] = None
     last_updated: datetime = Field(default_factory=datetime.now)
-    current_task_status: TaskStatus = Field(default=TaskStatus.PENDING)
-    
-    # For database compatibility
-    session_id: Optional[int] = None
-    current_request_id: Optional[str] = None
+    db_manager: Optional[Any] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -89,8 +85,24 @@ class ConversationState(BaseModel):
         values['last_updated'] = datetime.now()
         return values
 
-    def add_message(self, role: MessageRole, content: str, metadata: Optional[Dict[str, Any]] = None) -> Message:
-        """Add a new message to the conversation with validation."""
+    async def add_message(self, role: MessageRole, content: str, metadata: Optional[Dict[str, Any]] = None, sender: str = None, target: str = None) -> Message:
+        """Add a new message to the session with validation and optional persistence.
+        
+        Args:
+            role: The role of the message sender
+            content: The message content
+            metadata: Optional metadata for the message
+            sender: Required sender string
+            target: Required target string
+        
+        Returns:
+            The created message object
+        
+        Note:
+            If db_manager is set, this will also persist the message to the database.
+        """
+        if not sender or not target:
+            raise ValueError("Both sender and target must be provided for message persistence.")
         message = Message(
             role=role,
             content=content,
@@ -98,10 +110,24 @@ class ConversationState(BaseModel):
         )
         self.messages.append(message)
         self.last_updated = datetime.now()
+        if self.db_manager and hasattr(self.db_manager, 'message_manager'):
+            try:
+                await self.db_manager.message_manager.add_message(
+                    session_id=self.session_id,
+                    role=role,
+                    content=content,
+                    metadata=metadata or {},
+                    user_id="developer",
+                    sender=sender,
+                    target=target
+                )
+            except Exception as e:
+                logger.warning(f"Failed to persist message to database: {e}")
+                # Continue even if database persistence fails
         return message
 
     def get_last_message(self) -> Optional[Message]:
-        """Get the last message in the conversation."""
+        """Get the last message in the session."""
         return self.messages[-1] if self.messages else None
 
     def get_context_window(self, n: int = 5) -> List[Message]:
@@ -112,10 +138,10 @@ class GraphState(TypedDict):
     """
     Represents the full state of the conversation graph including all agents.
     """
-    messages: Annotated[List[Message], lambda x, y: x + y]
-    conversation_state: ConversationState
-    agent_states: Dict[str, Any]
-    current_task: Optional[str]
-    task_history: List[str]
-    agent_results: Dict[str, Any]
-    final_result: Optional[str] 
+    messages: List[Message]  # Direct list of messages
+    conversation_state: Dict[str, Any]  # Simple dict for conversation state
+    agent_states: Dict[str, Any]  # State for each agent
+    current_task: Optional[str]  # Current task being processed
+    task_history: List[str]  # History of tasks
+    agent_results: Dict[str, Any]  # Results from each agent
+    final_result: Optional[str]  # Final result of processing 

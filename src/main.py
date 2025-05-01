@@ -1,116 +1,179 @@
 """
 Main entry point for the orchestrator system.
 
-This module provides functions to initialize the agent and
-start the appropriate interface based on configuration settings.
+This module initializes core components and starts the interface.
+It demonstrates the distinction between managers and services by:
+1. Using services for utility functions (database, logging)
+2. Using managers for state and coordination (session, state)
 """
 
-import sys
-import logging
-
-# Setup logging first thing
 from src.config.logging_config import setup_logging
 setup_logging()
 
-# Get logger
-from src.services.logging_services.logging_service import get_logger
+from pathlib import Path
+from typing import Optional, Tuple, Dict, Any
+
+from src.config import Configuration
+from src.agents.orchestrator_agent import OrchestratorAgent
+from src.agents.llm_query_agent import LLMQueryAgent
+from src.agents.personality_agent import PersonalityAgent
+from src.ui.cli import CLIInterface
+from src.managers.session_manager import SessionManager
+from src.services.session_service import SessionService
+from src.managers.db_manager import DBService
+from src.services.message_service import DatabaseMessageService
+from src.services.logging_service import get_logger
+from src.state.state_models import MessageState
+
 logger = get_logger(__name__)
 
-# Import configuration
-from src.config import Configuration
+def find_personality_file(config: Configuration, personality_file: Optional[str] = None) -> Optional[str]:
+    """
+    Find the personality file to use.
+    
+    Args:
+        config: Configuration instance
+        personality_file: Optional path to personality file
+        
+    Returns:
+        Path to personality file or None if not found/enabled
+    """
+    try:
+        # Check if personality is enabled
+        if not config.personality_enabled:
+            logger.debug("Personality system disabled in config")
+            return None
+            
+        # Use provided file if specified
+        if personality_file:
+            file_path = Path(personality_file)
+            if not file_path.exists():
+                logger.error(f"Personality file not found: {file_path}")
+                return None
+            return str(file_path)
+            
+        # Use default from config
+        if config.personality_file_path:
+            file_path = Path(config.personality_file_path)
+            if not file_path.exists():
+                logger.error(f"Default personality file not found: {file_path}")
+                return None
+            return str(file_path)
+            
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error finding personality file: {e}")
+        return None
 
-def run_with_interface(interface_type="cli", session_id=None):
+def initialize_agents(config: Configuration, personality_file: Optional[str] = None) -> Tuple[OrchestratorAgent, LLMQueryAgent]:
+    """
+    Initialize the agent system.
+    
+    Args:
+        config: Configuration instance
+        personality_file: Optional path to personality file
+        
+    Returns:
+        Tuple of (OrchestratorAgent, LLMQueryAgent)
+        
+    Raises:
+        RuntimeError: If agent initialization fails
+    """
+    try:
+        # Initialize LLM query agent first
+        llm_agent = LLMQueryAgent(config, personality_file)
+        # If personality_file is provided, wrap with PersonalityAgent
+        if personality_file:
+            llm_agent = PersonalityAgent(llm_agent, personality_file)
+        # Initialize orchestrator agent
+        agent = OrchestratorAgent(config)
+        return agent, llm_agent
+    except Exception as e:
+        error_msg = f"Failed to initialize agents: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+async def run_with_interface(interface_type: str = "cli", session_id: Optional[str] = None, 
+                      personality_file: Optional[str] = None) -> int:
     """
     Run the orchestrator with the specified interface.
     
     Args:
-        interface_type: The type of interface to use (cli, api, web, graph)
-        session_id: Optional session ID to continue an existing conversation
+        interface_type: Type of interface to use (cli, api, web, graph)
+        session_id: Optional session ID to continue
+        personality_file: Optional path to personality file
         
     Returns:
         Exit code (0 for success, non-zero for error)
     """
     try:
-        # Load configuration
         config = Configuration()
+        # Logging is already set up at the top
+        log_config = config.user_config.get_logging_config() if hasattr(config, 'user_config') else {}
+        console_level = log_config.get('console_level', 'INFO')
+        logger.debug(f"Logging initialized at {console_level} level (console)")
         
-        # Initialize the orchestrator agent
-        logger.debug("Initializing orchestrator agent...")
-        from src.agents.orchestrator_agent import OrchestratorAgent
-        agent = OrchestratorAgent(config)
+        # Initialize core components
+        personality_path = find_personality_file(config, personality_file)
+        agent, llm_agent = initialize_agents(config, personality_path)
         
-        # Initialize the appropriate interface
-        logger.debug(f"Starting {interface_type} interface...")
-        
-        if interface_type == "cli":
-            from src.ui.cli import CLIInterface
-            interface = CLIInterface(agent)
-        # These should be commented out until implemented
-        # elif interface_type == "api":
-        #     from src.ui.api_server import APIInterface
-        #     interface = APIInterface(agent)
-        # elif interface_type == "web":
-        #     from src.ui.web import WebInterface
-        #     interface = WebInterface(agent)
-        # elif interface_type == "graph":
-        #     from src.ui.graph_adapter import GraphInterface
-        #     interface = GraphInterface(agent)
-        else:
-            # Fallback to CLI
-            logger.warning(f"Interface '{interface_type}' not recognized, falling back to CLI")
-            from src.ui.cli import CLIInterface
-            interface = CLIInterface(agent)
-        
-        # If a session ID was provided, continue that session
-        if session_id:
-            # Get conversation directly from database
-            conversation = agent.db.continue_conversation(session_id, agent.user_id)
-            if conversation:
-                # Set agent's conversation ID directly
-                agent.conversation_id = session_id
-                agent.session_id = session_id  # Alias for compatibility
-                
-                # Update state manager if available
-                if hasattr(agent, 'state_manager') and agent.state_manager:
-                    try:
-                        # Get messages for this conversation from the database
-                        messages = agent.db.message_manager.get_messages_by_session(
-                            session_id, format_type="standard"
-                        )
-                        for msg in messages:
-                            role = msg.get('role')
-                            content = msg.get('content')
-                            agent.state_manager.update_conversation(role, content)
-                    except Exception as e:
-                        logger.warning(f"Could not load messages for conversation {session_id}: {e}")
-                
-                logger.debug(f"Continued session {session_id}")
-            else:
-                logger.error(f"Failed to continue session {session_id}")
-                return 1
+        # Initialize database and session services
+        db_service = DBService()
+        # Initialize message service and assign to db_service.message_manager
+        message_service = DatabaseMessageService(db_service)
+        db_service.message_manager = message_service
+        logger.debug("Initialized database and message services")
+        session_service = SessionService(db_service)
+        session_manager = SessionManager(session_service)
+
+        # Ensure agent's graph_state['conversation_state'] uses MessageState with db_manager
+        if not hasattr(agent, 'graph_state') or agent.graph_state is None:
+            agent.graph_state = {}
+        session_id = await session_service.create_session(user_id="developer")
+        agent.graph_state['conversation_state'] = MessageState(session_id=int(session_id), db_manager=db_service)
+
+        # Initialize interface (only CLI supported for now)
+        if interface_type != "cli":
+            logger.warning(f"Interface '{interface_type}' not supported, using CLI")
+        interface = CLIInterface(agent, session_manager)
         
         # Start the interface
-        interface.start()
-        
+        await interface.start()
         return 0
-    except ImportError as e:
-        logger.error(f"Failed to import module: {e}")
-        print(f"Error: The selected interface is not available. {e}")
-        return 1
+        
     except Exception as e:
-        logger.error(f"Error in main: {e}", exc_info=True)
-        print(f"Error: {e}")
+        logger.error(f"Application error: {e}", exc_info=True)
         return 1
 
-def main():
-    """
-    Legacy main entry point that uses command-line arguments.
-    Kept for backward compatibility.
-    """
-    logger.warning("Using legacy main() with command-line arguments. Consider using run_with_interface() instead.")
+def main() -> int:
+    """Parse command line arguments and run the application."""
+    import argparse
+    import asyncio
     
-    # Initialize with default settings
-    return run_with_interface()
+    parser = argparse.ArgumentParser(description="Run the orchestrator agent system")
+    parser.add_argument(
+        "--interface", "-i",
+        choices=["cli"],  # Only CLI supported for now
+        default="cli",
+        help="Interface type to use"
+    )
+    parser.add_argument(
+        "--session", "-s",
+        help="Session ID to continue an existing conversation"
+    )
+    parser.add_argument(
+        "--personality", "-p",
+        help="Path to a personality JSON file"
+    )
+    
+    args = parser.parse_args()
+    return asyncio.run(run_with_interface(
+        interface_type=args.interface,
+        session_id=args.session,
+        personality_file=args.personality
+    ))
 
 if __name__ == "__main__":
+    import sys
     sys.exit(main()) 

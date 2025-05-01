@@ -14,6 +14,13 @@ import logging
 import threading
 import requests
 from typing import Dict, Any, List, Optional, Union
+from datetime import datetime
+
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+from src.services.logging_service import get_logger
+from src.services.db_services.query_service import execute_query
 
 # Add project path for imports
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
@@ -21,8 +28,7 @@ if project_path not in sys.path:
     sys.path.insert(0, project_path)
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Dictionary to store pending MCP requests
 PENDING_MCP_REQUESTS = {}
@@ -218,7 +224,6 @@ class MCPAdapter:
 
             # Handle Postgres operations
             elif endpoint_name == "postgres":
-                from src.services.db_services.query_service import execute_query
                 result = execute_query(parameters.get("sql", ""))
             
             # Unsupported local endpoint

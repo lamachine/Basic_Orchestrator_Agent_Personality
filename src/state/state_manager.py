@@ -1,22 +1,12 @@
 """
 State Manager Module - Central persistence and retrieval system for application state.
 
-This module defines the StateManager class which provides a unified interface for 
-storing, retrieving, and manipulating application state, including:
-
-1. Conversation persistence - storing and retrieving conversation history and metadata
-2. Message management - adding, retrieving, and organizing messages within conversations
-3. Database abstraction - providing a clean interface to the underlying Supabase database
-4. State validation - ensuring data integrity through Pydantic models
-5. Transaction management - handling atomic operations for data consistency
-
-The StateManager is a critical infrastructure component used by the BaseAgent and its
-specialized implementations to maintain persistent state across sessions and 
-ensure data consistency throughout the application.
-
-This architecture centralizes all state operations, providing a single source of truth
-for the application state while isolating the details of the underlying database
-implementation from the rest of the application.
+Provides a unified interface for storing, retrieving, and manipulating application state, including:
+- Conversation persistence
+- Message management
+- Database abstraction
+- State validation
+- Transaction management
 """
 
 from typing import Dict, List, Any, Optional
@@ -25,9 +15,9 @@ from datetime import datetime, timedelta
 from src.state.state_models import (
     Message, 
     MessageRole, 
-    ConversationState, 
+    MessageState, 
     TaskStatus, 
-    GraphState
+    GraphState,
 )
 from src.state.state_errors import (
     StateError, 
@@ -37,34 +27,17 @@ from src.state.state_errors import (
 )
 from src.state.state_validator import StateValidator
 
-def create_initial_state() -> GraphState:
-    """
-    Create a new GraphState with initial values.
-    
-    Returns:
-        A new initialized GraphState
-    """
-    return GraphState(
-        messages=[],
-        conversation_state=ConversationState(),
-        agent_states={},
-        current_task=None,
-        task_history=[],
-        agent_results={},
-        final_result=None
-    )
-
 def update_agent_state(state: GraphState, agent_id: str, update: Dict[str, Any]) -> GraphState:
     """
     Update an agent's state with validation.
-    
+
     Args:
-        state: The current graph state
-        agent_id: The ID of the agent to update
-        update: The state updates to apply
-        
+        state (GraphState): The current graph state
+        agent_id (str): The ID of the agent to update
+        update (Dict[str, Any]): The state updates to apply
+
     Returns:
-        The updated graph state
+        GraphState: The updated graph state
     """
     if agent_id not in state['agent_states']:
         state['agent_states'][agent_id] = {}
@@ -74,30 +47,28 @@ def update_agent_state(state: GraphState, agent_id: str, update: Dict[str, Any])
 def add_task_to_history(state: GraphState, task: str) -> GraphState:
     """
     Add a task to the history with timestamp.
-    
+
     Args:
-        state: The current graph state
-        task: The task description
-        
+        state (GraphState): The current graph state
+        task (str): The task description
+
     Returns:
-        The updated graph state
+        GraphState: The updated graph state
     """
     state['task_history'].append(f"{datetime.now().isoformat()}: {task}")
     return state
 
 class StateManager:
     """
-    Manager class for maintaining state consistency and validation.
+    Manages application state, validation, and (optionally) persistence.
     """
-    
-    def __init__(self, state: GraphState):
+    def __init__(self, db_manager: Optional[Any] = None) -> None:
         """
-        Initialize the state manager.
-        
         Args:
-            state: The initial graph state
+            db_manager (Optional[Any]): Optional database manager for persistence
         """
-        self.state = state
+        self.sessions: Dict[str, MessageState] = {}
+        self.db_manager = db_manager
         self.validator = StateValidator()
         self._last_update = datetime.now()
         self._update_count = 0
@@ -106,204 +77,256 @@ class StateManager:
     def _check_rate_limit(self) -> None:
         """
         Prevent too frequent updates.
-        
+
         Raises:
             StateUpdateError: If updates are happening too frequently
         """
         current_time = datetime.now()
         if (current_time - self._last_update) < timedelta(milliseconds=100):
             self._update_count += 1
-            if self._update_count > 100:  # Arbitrary limit
+            if self._update_count > 100:
                 raise StateUpdateError("Too many rapid state updates")
         else:
             self._update_count = 0
         self._last_update = current_time
 
-    def update_conversation(self, role: MessageRole, content: str, metadata: Optional[Dict[str, Any]] = None) -> Message:
+    def get_session(self, session_id: str) -> MessageState:
         """
-        Add a message and update conversation state with validation.
-        
+        Get or create a message state for a session.
         Args:
-            role: The role of the message sender
-            content: The message content
-            metadata: Optional metadata for the message
-            
+            session_id (str): The ID of the session
         Returns:
-            The created message
-            
+            MessageState: The message state object
+        """
+        session_id_int = int(session_id)
+        if session_id_int not in self.sessions:
+            self.sessions[session_id_int] = MessageState(
+                session_id=session_id_int,
+                db_manager=self.db_manager
+            )
+        return self.sessions[session_id_int]
+
+    async def update_session(
+        self,
+        session_id: str,
+        role: MessageRole,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> MessageState:
+        """
+        Update a session with a new message.
+
+        Args:
+            session_id (str): The ID of the session to update
+            role (MessageRole): The role of the message sender
+            content (str): The message content
+            metadata (Optional[Dict[str, Any]]): Optional metadata for the message
+
+        Returns:
+            MessageState: The updated message state
+
         Raises:
-            StateUpdateError: If the update fails validation
+            StateUpdateError: If the message sequence is invalid or update fails
         """
         try:
             self._check_rate_limit()
-            message = Message(role=role, content=content, metadata=metadata or {})
-            temp_messages = self.state['messages'] + [message]
-            if not self.validator.validate_message_sequence(temp_messages):
-                raise ValidationError("Invalid message sequence")
-            message = self.state['conversation_state'].add_message(role, content, metadata)
-            self.state['messages'].append(message)
-            return message
+            session = self.get_session(session_id)
+            last_message = session.get_last_message()
+            if last_message:
+                if role == last_message.role == MessageRole.USER:
+                    raise StateUpdateError("Cannot have two consecutive user messages")
+                if role == last_message.role == MessageRole.ASSISTANT:
+                    raise StateUpdateError("Cannot have two consecutive assistant messages")
+            await session.add_message(role, content, metadata)
+            return session
         except Exception as e:
             self._error_count += 1
-            raise StateUpdateError(f"Failed to update conversation: {str(e)}") from e
+            raise StateUpdateError(f"Failed to update session: {str(e)}") from e
 
-    def update_agent_state(self, agent_id: str, status: Dict[str, Any]) -> None:
+    def get_all_sessions(self) -> List[MessageState]:
         """
-        Update agent state with validation.
-        
+        Get all active sessions.
+
+        Returns:
+            List[MessageState]: All session states
+        """
+        return list(self.sessions.values())
+
+    async def update_agent_state(
+        self,
+        session_id: str,
+        agent_id: str,
+        status: Dict[str, Any]
+    ) -> None:
+        """
+        Update an agent's state within a session.
+
         Args:
-            agent_id: The ID of the agent to update
-            status: The status updates to apply
-            
+            session_id (str): The session ID
+            agent_id (str): The agent's ID
+            status (Dict[str, Any]): The new status data
+
         Raises:
-            StateUpdateError: If the update fails validation
+            StateUpdateError: If the update fails
         """
         try:
             self._check_rate_limit()
+            session = self.get_session(session_id)
             if not self.validator.validate_agent_state(agent_id, status):
                 raise ValidationError(f"Invalid agent state structure for {agent_id}")
-            if agent_id not in self.state['agent_states']:
-                self.state['agent_states'][agent_id] = {}
-            self.state['agent_states'][agent_id].update(status)
+            await session.update_agent_state(agent_id, status)
         except Exception as e:
             self._error_count += 1
             raise StateUpdateError(f"Failed to update agent state: {str(e)}") from e
 
-    def set_task(self, task: str) -> None:
+    async def start_task(
+        self,
+        session_id: str,
+        task: str
+    ) -> None:
         """
-        Set task with validation.
-        
+        Start a new task in the session.
+
         Args:
-            task: The task description
-            
+            session_id (str): The session ID
+            task (str): The task description
+
         Raises:
-            StateUpdateError: If the task update fails
-            StateTransitionError: If the task transition is invalid
+            StateUpdateError: If the task cannot be started
         """
         try:
             self._check_rate_limit()
-            current_status = self.state['conversation_state'].current_task_status
+            session = self.get_session(session_id)
+            current_status = session.current_task_status
             if not self.validator.validate_task_transition(current_status, TaskStatus.IN_PROGRESS):
                 raise StateTransitionError(
                     f"Invalid task transition from {current_status} to {TaskStatus.IN_PROGRESS}"
                 )
-            self.state['current_task'] = task
-            self.state['task_history'].append(f"{datetime.now().isoformat()}: {task}")
-            self.state['conversation_state'].current_task_status = TaskStatus.IN_PROGRESS
+            await session.start_task(task)
         except Exception as e:
             self._error_count += 1
-            raise StateUpdateError(f"Failed to set task: {str(e)}") from e
+            raise StateUpdateError(f"Failed to start task: {str(e)}") from e
 
-    def complete_task(self, result: Optional[str] = None) -> None:
+    async def complete_task(
+        self,
+        session_id: str,
+        result: Optional[Dict[str, Any]] = None
+    ) -> None:
         """
-        Complete task with validation.
-        
+        Complete the current task in the session.
+
         Args:
-            result: Optional result from the completed task
-            
+            session_id (str): The session ID
+            result (Optional[Dict[str, Any]]): Optional task result data
+
         Raises:
-            StateError: If there is no active task
-            StateTransitionError: If the task transition is invalid
-            StateUpdateError: If the task completion fails
+            StateUpdateError: If the task cannot be completed
         """
         try:
             self._check_rate_limit()
-            if not self.state['current_task']:
+            session = self.get_session(session_id)
+            if not session.current_task:
                 raise StateError("No active task to complete")
-            current_status = self.state['conversation_state'].current_task_status
+            current_status = session.current_task_status
             if not self.validator.validate_task_transition(current_status, TaskStatus.COMPLETED):
                 raise StateTransitionError(
                     f"Invalid task transition from {current_status} to {TaskStatus.COMPLETED}"
                 )
-            self.state['conversation_state'].current_task_status = TaskStatus.COMPLETED
-            if result:
-                self.state['agent_results'][self.state['current_task']] = result
-            self.state['current_task'] = None
+            await session.complete_task(result)
         except Exception as e:
             self._error_count += 1
             raise StateUpdateError(f"Failed to complete task: {str(e)}") from e
 
-    def fail_task(self, error: str) -> None:
+    async def fail_task(
+        self,
+        session_id: str,
+        error: str
+    ) -> None:
         """
-        Fail task with validation.
-        
+        Mark the current task as failed in the session.
+
         Args:
-            error: The error description
-            
+            session_id (str): The session ID
+            error (str): The error message
+
         Raises:
-            StateError: If there is no active task
-            StateTransitionError: If the task transition is invalid
-            StateUpdateError: If the task failure update fails
+            StateUpdateError: If the task cannot be marked as failed
         """
         try:
             self._check_rate_limit()
-            if not self.state['current_task']:
+            session = self.get_session(session_id)
+            if not session.current_task:
                 raise StateError("No active task to fail")
-            current_status = self.state['conversation_state'].current_task_status
+            current_status = session.current_task_status
             if not self.validator.validate_task_transition(current_status, TaskStatus.FAILED):
                 raise StateTransitionError(
                     f"Invalid task transition from {current_status} to {TaskStatus.FAILED}"
                 )
-            self.state['conversation_state'].current_task_status = TaskStatus.FAILED
-            task_name = self.state['current_task']
-            self.state['task_history'].append(
-                f"{datetime.now().isoformat()}: FAILED: {task_name} - {error}"
-            )
-            self.state['current_task'] = None
+            await session.fail_task(error)
         except Exception as e:
             self._error_count += 1
-            raise StateUpdateError(f"Failed to update task failure: {str(e)}") from e
+            raise StateUpdateError(f"Failed to mark task as failed: {str(e)}") from e
 
     def get_error_stats(self) -> Dict[str, int]:
         """
         Get error statistics.
-        
+
         Returns:
-            Dictionary with error statistics
+            Dict[str, int]: Error and update counts
         """
         return {
             "error_count": self._error_count,
             "update_count": self._update_count
         }
 
-    def get_agent_state(self, agent_id: str) -> Dict[str, Any]:
+    def get_agent_state(
+        self,
+        session_id: str,
+        agent_id: str
+    ) -> Dict[str, Any]:
         """
-        Get the state of a specific agent.
-        
+        Get an agent's state from a session.
+
         Args:
-            agent_id: The ID of the agent
-            
-        Returns:
-            The agent's state, or an empty dict if not found
-        """
-        return self.state['agent_states'].get(agent_id, {})
+            session_id (str): The session ID
+            agent_id (str): The agent's ID
 
-    def get_conversation_context(self, window_size: int = 5) -> List[Message]:
+        Returns:
+            Dict[str, Any]: The agent's state, or an empty dict if not found
         """
-        Get the recent conversation context.
-        
+        session = self.get_session(session_id)
+        return session.get_agent_state(agent_id)
+
+    def get_session_context(
+        self,
+        session_id: str,
+        window_size: int = 5
+    ) -> List[Message]:
+        """
+        Get recent messages from a session.
+
         Args:
-            window_size: The number of recent messages to include
-            
-        Returns:
-            List of the most recent messages
-        """
-        return self.state['conversation_state'].get_context_window(window_size)
+            session_id (str): The session ID
+            window_size (int): Number of recent messages to return
 
-    def get_task_history(self) -> List[str]:
-        """
-        Get the task history.
-        
         Returns:
-            List of task history entries
+            List[Message]: The most recent messages
         """
-        return self.state['task_history']
+        session = self.get_session(session_id)
+        return session.get_context_window(window_size)
 
-    def get_current_state(self) -> GraphState:
+    def get_task_history(
+        self,
+        session_id: str
+    ) -> List[str]:
         """
-        Get the current full graph state.
-        
+        Get the task history for a session.
+
+        Args:
+            session_id (str): The session ID
+
         Returns:
-            The current graph state
+            List[str]: Task history entries
         """
-        return self.state 
+        session = self.get_session(session_id)
+        return session.task_history 

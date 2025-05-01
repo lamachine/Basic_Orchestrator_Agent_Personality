@@ -11,8 +11,8 @@ import json
 import uuid
 from datetime import datetime
 
-from src.agents.llm_query_agent import LLMQueryAgent
-from src.services.db_services.db_manager import ConversationState, TaskStatus, MessageRole
+from src.agents.llm_query_agent import LLMQueryAgent, LLMQueryError
+from src.managers.db_manager import ConversationState, TaskStatus, MessageRole
 from src.config import Configuration
 
 class TestLLMQueryAgent(unittest.TestCase):
@@ -106,7 +106,8 @@ class TestLLMQueryAgent(unittest.TestCase):
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "response": "Hello, human!",
-            "model": "test-model"
+            "model": "test-model",
+            "done": True
         }
         mock_post.return_value = mock_response
         
@@ -115,20 +116,36 @@ class TestLLMQueryAgent(unittest.TestCase):
         
         # Verify
         self.assertEqual(response, "Hello, human!")
-        mock_post.assert_called_once()
+        mock_post.assert_called_once_with(
+            f"{self.agent.api_url}/generate",
+            json={
+                "model": self.agent.model,
+                "prompt": test_prompt,
+                "stream": False
+            }
+        )
     
     @patch('src.agents.llm_query_agent.requests.post')
     def test_query_llm_failure(self, mock_post):
-        """Test querying the LLM with a failed API response."""
+        """Test querying the LLM with a failed response."""
         # Setup
         test_prompt = "Hello, AI!"
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_post.return_value = mock_response
         
-        # Simulate a failed API call
-        mock_post.side_effect = Exception("API error")
-        
-        # Exercise and Verify
-        with self.assertRaises(Exception):
+        # Exercise & Verify
+        with self.assertRaises(LLMQueryError):
             self.agent.query_llm(test_prompt)
+        
+        mock_post.assert_called_once_with(
+            f"{self.agent.api_url}/generate",
+            json={
+                "model": self.agent.model,
+                "prompt": test_prompt,
+                "stream": False
+            }
+        )
     
     @patch('src.agents.llm_query_agent.requests.post')
     def test_query_llm_edge_case_empty_response(self, mock_post):
@@ -137,18 +154,22 @@ class TestLLMQueryAgent(unittest.TestCase):
         test_prompt = "Hello, AI!"
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "",
-            "model": "test-model"
-        }
+        mock_response.json.return_value = {"response": "", "done": True}
         mock_post.return_value = mock_response
         
         # Exercise
-        response = self.agent.query_llm(test_prompt)
+        result = self.agent.query_llm(test_prompt)
         
         # Verify
-        self.assertEqual(response, "")
-        mock_post.assert_called_once()
+        self.assertEqual(result, "")
+        mock_post.assert_called_once_with(
+            f"{self.agent.api_url}/generate",
+            json={
+                "model": self.agent.model,
+                "prompt": test_prompt,
+                "stream": False
+            }
+        )
     
     def test_process_llm_response_with_tool_calls(self):
         """Test processing an LLM response that contains tool calls."""

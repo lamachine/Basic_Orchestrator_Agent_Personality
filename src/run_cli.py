@@ -6,7 +6,7 @@ with the CLI interface selected.
 """
 
 from src.main import run_with_interface
+import asyncio
 
 if __name__ == "__main__":
-    # Call the main orchestrator function with CLI interface
-    run_with_interface("cli") 
+    asyncio.run(run_with_interface("cli")) 

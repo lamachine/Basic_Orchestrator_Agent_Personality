@@ -62,7 +62,7 @@ def test_agent_initialization(mock_config, mock_db_manager, mock_logger):
     agent = LLMQueryAgent(config=mock_config)
     
     # Check configuration was used
-    assert agent.api_url == 'http://test:11434/api/generate'
+    assert agent.api_url == 'http://test:11434'
     assert agent.model == 'test-model'
     
     # Check database was initialized
@@ -109,13 +109,23 @@ def test_query_llm_success(mock_config, mock_requests_post, mock_logger):
     agent = LLMQueryAgent(config=mock_config)
     with patch.object(agent, 'has_db', False):  # Ensure DB doesn't interfere with test
         mock_response = Mock()
-        mock_response.json.return_value = {'response': 'I am fine, thank you.'}
+        mock_response.json.return_value = {'response': 'I am fine, thank you.', 'done': True}
         mock_response.raise_for_status = Mock()
         mock_requests_post.return_value = mock_response
 
         prompt = agent.generate_prompt("Hello, how are you?")
-        response = agent.query_llm(prompt)
-        assert response == 'I am fine, thank you.'
+        result = agent.query_llm(prompt)
+        assert result == 'I am fine, thank you.'
+        
+        # Check API call
+        mock_requests_post.assert_called_once_with(
+            f"{agent.api_base}/generate",
+            json={
+                "model": agent.model,
+                "prompt": prompt,
+                "stream": False
+            }
+        )
         
         # Check logging occurred
         mock_logger.info.assert_any_call(f"Querying LLM model: {agent.model}")
@@ -128,8 +138,18 @@ def test_query_llm_failure(mock_config, mock_requests_post, mock_logger):
         mock_requests_post.side_effect = Exception("Network error")
 
         prompt = agent.generate_prompt("Hello, how are you?")
-        response = agent.query_llm(prompt)
-        assert "Error querying LLM" in response
+        result = agent.query_llm(prompt)
+        assert "Error querying LLM" in result
+        
+        # Check API call was attempted
+        mock_requests_post.assert_called_once_with(
+            f"{agent.api_base}/generate",
+            json={
+                "model": agent.model,
+                "prompt": prompt,
+                "stream": False
+            }
+        )
         
         # Check error was logged
         mock_logger.error.assert_called_once()

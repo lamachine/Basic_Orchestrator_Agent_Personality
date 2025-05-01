@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-from src.services.db_services.db_manager import (
+from src.managers.db_manager import (
     DatabaseManager,
     ConversationState,
     ConversationMetadata,

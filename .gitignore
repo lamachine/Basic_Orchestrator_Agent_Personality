@@ -37,5 +37,7 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db 
+*.pickle
+env.txt
 
 other_files_future_use/

@@ -583,7 +583,7 @@ async def build_agent(ctx: Context, spec: str) -> str:
 ### Step 1: Refactor the Orchestrator to Route by Agent, Not Tool
 
 **Checklist:**
-- [ ] Create/verify agent handler modules: `agent_valet.py`, `agent_librarian.py`, `agent_personal_assistant.py` (or similar).
+- [x] Create/verify agent handler modules: `agent_valet.py`, `agent_librarian.py`, `agent_personal_assistant.py` (or similar).
     - [x] Create backup for @ai_agent.py
     - [x] Create BaseAgent
     - [x] Refactor ai_agent to use BaseAgent
@@ -709,3 +709,493 @@ Update documentation: Ensure README and docs reflect the new modular structure.
 Update any import statements: Check if any other files are still importing from the old ai_agent.py and update them.
 Review TODOs: Check for any TODOs in the code that should be addressed.
 Check test coverage: Ensure tests cover the refactored code properly, particularly around the CLI interface and tool processing.
+
+## Code Organization Recommendations
+
+### Testing Infrastructure
+- [ ] Move scattered test files (`test_*.py`) into the `tests/` directory
+- [ ] Ensure test files mirror the main app structure
+- [ ] Add test cases following the pattern: 1 expected use, 1 edge case, 1 failure case
+
+### Documentation Organization
+- [ ] Consider consolidating README files or creating a docs directory
+- [ ] Update `TODO.md` to match the format specified in `PROJECT_STATUS.md`
+- [ ] Review and update all docstrings to follow Google style
+
+### Code Structure
+- [ ] Move `models.py` into the `src/models/` directory
+- [ ] Review root-level Python files for functionality that should be in `src/`
+- [ ] Review `main.py` (201 lines) for potential modularization
+- [ ] Consider moving `examples/` to top-level directory
+- [ ] Review `services/` directory for potential further subdivision
+
+### Development Environment
+- [ ] Add type checking configuration (e.g., `mypy.ini`)
+- [ ] Add pre-commit hooks for code formatting with black
+- [ ] Review and update `requirements.txt` version constraints
+- [ ] Consider adding development requirements file (`requirements-dev.txt`)
+
+# Mem0 changes to meet their standards
+## To align our implementation with Mem0's standard functions, we should:
+- Update our memory service to use their hybrid storage approach
+- Implement their standard memory operations interface
+- Add memory extraction using LLMs
+- Enhance our vector search with their scoring system
+- Add proper metadata handling for better context
+
+## Mem0 Hybrid Storage Upgrade
+
+### Infrastructure Impact Checklist
+- [ ] Add Neo4j for graph storage
+- [x] ~~Add Redis for key-value storage~~ (Will add later if needed for performance optimization)
+- [ ] Update deployment configurations
+- [ ] Update documentation
+- [ ] Update integration tests
+
+### Required Changes for Hybrid Storage
+
+#### 1. Storage Layer Configuration
+- [ ] Update Mem0 configuration to version v1.1
+- [ ] Configure vector store (pgvector)
+- [ ] Configure graph store (Neo4j)
+- [x] ~~Configure key-value store (Redis)~~ (Will use Supabase for now, Redis can be added later for performance)
+- [ ] Update environment variables
+- [ ] Optimize supabase
+```sql
+# Use efficient indexing
+CREATE INDEX idx_memories_vector ON memories 
+USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 100);
+
+# Use materialized views for frequently accessed data
+CREATE MATERIALIZED VIEW recent_memories AS
+SELECT * FROM memories 
+WHERE created_at > NOW() - INTERVAL '24 hours';
+```
+
+#### 2. Memory Processing Updates
+- [ ] Enhance memory addition with fact extraction
+- [ ] Implement relationship tracking
+- [ ] Update metadata handling
+- [ ] Add timestamp tracking
+- [ ] Implement memory versioning
+- [ ] Implement memory caching in python
+```python
+from functools import lru_cache
+
+class MemoryService:
+    @lru_cache(maxsize=1000)
+    def get_memory(self, memory_id: str):
+        return self.supabase.table('memories').select('*').eq('id', memory_id).execute()
+```
+
+#### 3. Search and Retrieval Updates
+- [ ] Implement vector search for semantic similarity
+- [ ] Add graph search for related memories
+- [ ] Create result merging and ranking system
+- [ ] Update context generation
+- [ ] Add memory scoring system
+
+#### 4. Database Schema Updates
+- [ ] Create new tables/collections for relationships
+- [ ] Update existing memory tables
+- [ ] Create migration scripts
+- [ ] Add indices for performance
+- [ ] Update backup procedures
+
+#### 5. Service Integration Updates
+- [ ] Update CLI interface
+- [ ] Update agent interfaces
+- [ ] Update MCP adapters
+- [ ] Add new environment variables
+- [ ] Update service dependencies
+
+#### 6. Testing Updates
+- [ ] Create tests for graph features
+- [ ] Create tests for key-value features
+- [ ] Update existing memory tests
+- [ ] Add integration tests
+- [ ] Update CI/CD pipeline
+
+### Dependencies to Add
+```requirements
+# Add to requirements.txt or equivalent
+neo4j-driver==5.x
+redis==5.x  # not needed for now
+pgvector==0.2.x
+```
+
+### Environment Variables to Add
+```env
+# Neo4j Configuration
+NEO4J_URL=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_password
+
+# Vector Store Configuration
+PGVECTOR_CONNECTION=postgresql://user:pass@localhost:5432/dbname
+```
+
+### Docker Services to Add
+```yaml
+# Add to docker-compose.yml
+services:
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    environment:
+      NEO4J_AUTH: neo4j/your_password
+    volumes:
+      # Mount external volume for persistent data storage
+      - ./data/neo4j:/data  # Store Neo4j data in local ./data/neo4j directory
+      - ./logs/neo4j:/logs  # Store Neo4j logs in local ./logs/neo4j directory
+    restart: unless-stopped  # Ensure container restarts automatically
+```
+
+**Note**: Neo4j data will be stored in an external volume (./data/neo4j) to ensure persistence across container rebuilds, similar to our Supabase implementation. This prevents data loss during container updates or system restarts.
+
+
+
+# Mem0 storage layer updates
+
+```python
+mem0_config = {
+    "version": "v1.1",  # Required for hybrid storage
+    "vector_store": {
+        "provider": "pgvector",
+        "config": {
+            "connection_string": os.environ.get('DATABASE_URL'),
+            "collection_name": "memories",
+            "embedding_model_dims": 1536  # For OpenAI embeddings
+        }
+    },
+    "graph_store": {
+        "provider": "neo4j",
+        "config": {
+            "url": os.environ.get('NEO4J_URL'),
+            "username": os.environ.get('NEO4J_USER'),
+            "password": os.environ.get('NEO4J_PASSWORD')
+        }
+    },
+    "key_value_store": {
+        "provider": "redis",
+        "config": {
+            "url": os.environ.get('REDIS_URL')
+        }
+    }
+}
+```
+
+# Mem0 memory processing updates
+
+```python
+def add_memory(self, content: Union[str, List[Dict]], user_id: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Enhanced memory addition with fact extraction and relationship tracking."""
+    try:
+        # Extract facts using LLM
+        facts = self.memory.extract_facts(content)
+        
+        # Add metadata
+        full_metadata = {
+            **(metadata or {}),
+            "extracted_facts": facts,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Store in hybrid system
+        result = self.memory.add(
+            content,
+            user_id=user_id,
+            metadata=full_metadata
+        )
+        
+        return {
+            "success": True,
+            "memory_id": result["id"],
+            "extracted_facts": facts
+        }
+    except Exception as e:
+        logger.error(f"Error storing memory: {e}")
+        return {"success": False, "error": str(e)}
+```
+
+# Mem0 search and retrieval updates
+
+```python
+def search_memories(self, query: str, user_id: str, limit: int = 5) -> Dict[str, Any]:
+    """Enhanced search across all storage types."""
+    try:
+        # Vector search for semantic similarity
+        vector_results = self.memory.search(
+            query,
+            user_id=user_id,
+            limit=limit
+        )
+        
+        # Graph search for related memories
+        graph_results = self.memory.graph_search(
+            query,
+            user_id=user_id,
+            limit=limit
+        )
+        
+        # Combine and rank results
+        all_results = self._merge_and_rank_results(
+            vector_results,
+            graph_results,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "results": all_results
+        }
+    except Exception as e:
+        logger.error(f"Error searching memories: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+```
+
+## Plug-and-Play Tool Wrapper Architecture
+
+### Checklist for Tool-as-Wrapper Pattern
+- [x] For each agent/sub-graph, create a tool wrapper file in `src/tools/` (e.g., `personal_assistant.py`).
+- [x] The tool wrapper must:
+    - [x] Contain a class (e.g., `PersonalAssistantTool`) with a uniform `execute` method.
+    - [x] Contain tool description and prompt as class variables or properties.
+    - [x] Import and delegate to the sub-graph/agent as needed.
+    - [x] (Optional) Provide a registration function for auto-discovery.
+- [x] The orchestrator must only interact with the tool interface, not sub-graph internals.
+- [x] To add a new agent:
+    - [x] Drop the sub-graph folder in place.
+    - [x] Add the tool wrapper file in `src/tools/`.
+    - [x] Register the tool (import or via registry).
+    - [x] Done.
+- [ ] Update documentation and tests to reflect the new pattern.
+
+---
+
+Next step: Update documentation and tests, then prepare to test orchestrator.
+
+
+
+## Import & Linter Error Fix Checklist (src/)
+
+### 1. src/agents/orchestrator_agent.py
+- [x] Import MessageRole from src.state.state_models (already fixed).
+- [x] If you use StateManager or Message, import from src.state.state_manager and src.state.state_models respectively, not from src.graphs.orchestrator_graph.
+- [x] Ensure all agent classes referenced in self.agent_classes are defined and imported correctly.
+
+### 2. src/agents/llm_query_agent.py
+- [x] Confirm src/services/db_services/db_manager.py exists and exports TaskStatus, MessageRole, etc.
+- [x] Confirm all functions imported from src.tools.orchestrator_tools exist.
+- [x] Confirm format_completed_tools_prompt exists (in src.tools.orchestrator_tools and src.state.state_manager, not src.graphs.orchestrator_graph).
+- [x] Check for any undefined names or missing imports.
+
+### 3. src/managers/db_manager.py
+- [x] Change from src.serFvices.llm_services.llm_service import LLMService to the correct path if needed (should be src/services/llm_service.py).
+- [x] Change from src.services.db_services.message_manager import MessageManager to the correct path if needed (should be src/services/message_service.py or similar).
+- [x] Confirm all functions from src.utils.datetime_utils exist.
+- [x] Ensure enums/constants like TaskStatus, MessageRole are not duplicated elsewhere.
+
+### 4. src/managers/session_manager.py
+- [x] Change from src.services.db_manager import DatabaseManager to from src.managers.db_manager import DatabaseManager.
+- [x] Confirm now exists in src.utils.datetime_utils.
+- [x] Use MessageRole from src.state.state_models.
+
+### 5. src/sub_graph_personal_assistant/graphs/personal_assistant_graph.py
+- [x] Change from src.services.logging_services.logging_service import get_logger to from src.services.logging_service import get_logger.
+- [x] Import MessageRole from src.state.state_models if used.
+
+### 6. src/sub_graph_personal_assistant/tools/google/gmail_tool.py
+- [x] Confirm credentials_handler.py, google_tool_base.py, and credentials.py exist in the same directory (credentials_handler.py not needed; credentials.py provides the required logic).
+- [x] Remove or fix fallback import (e.g., from tools.credentials_handler import get_credentials)
+- [x] Ensure all referenced functions/classes are defined.
+
+
+### 7. src/tools/graph_integration.py
+- [x] If you use StateManager, Message, or MessageRole, import from src.state.state_manager and src.state.state_models instead of src.graphs.orchestrator_graph.
+
+### 8. src/sub_graph_personal_assistant/agents/personal_assistant_agent.py
+- [x] Confirm all imports exist and are correct.
+- [x] Ensure all referenced classes/functions are defined.
+
+### 9. General
+- [x] Remove or update any import paths referencing logging_services, db_services, or other legacy/moved modules.
+- [x] Implement all abstract methods in subclasses of ABCs.
+- [ ] Remove unused files and dead code. (Move unused files to other_files_future_use, delete unused code.)
+- [ ] Run a linter and/or pytest to catch any remaining issues.
+
+# TODO: Refactor CLI Session Management to Use SessionManager
+
+## Checklist
+
+### 1. Identify All Custom Session Logic in CLI
+- [x] List all methods in `CLIInterface` (and related code) that:
+    - List previous sessions
+    - Start new sessions
+    - Resume/continue sessions
+    - Search sessions
+    - Store/retrieve session metadata
+- **Notes/Findings:**
+    - Custom session logic is implemented in the following methods in `CLIInterface`:
+      - `_get_recent_sessions(self)`
+      - `_handle_session_start(self)`
+      - `_search_sessions(self)`
+      - `_continue_session(self, session_id)`
+      - `_start_new_session(self)`
+    - These methods interact directly with the agent's `db` attribute for session listing, creation, and resumption.
+    - Session metadata (name, timestamps, etc.) is managed and displayed in the CLI, not via `SessionManager`.
+    - The CLI tracks the current session with `self.current_session_id` and `self.session_name`.
+    - User is prompted at startup to select, search, or create sessions.
+    - All session state and metadata handling should be migrated to use `SessionManager` methods for:
+      - Listing sessions
+      - Searching/filtering sessions
+      - Creating new sessions
+      - Resuming previous sessions
+      - Accessing and displaying session metadata
+
+---
+
+### 2. Review `SessionManager` API
+- [x] Review the methods provided by `SessionManager` (e.g., `list_sessions`, `start_session`, `restore_session`, `get_session_metadata`, etc.).
+- [x] Ensure it provides all the functionality needed for the CLI. If not, extend `SessionManager` as needed.
+- **Notes/Findings:**
+    - **SessionManager Methods:**
+        - `create_session(name)`: Create a new session (async)
+        - `restore_session(session_id)`: Restore a previous session (async)
+        - `get_recent_sessions(limit)`: List recent sessions (async)
+        - `search_sessions(query)`: Search sessions by query (async)
+        - `rename_session(new_name)`: Rename the current session (async)
+        - `end_session()`: End the current session (async)
+        - `has_active_session`: Property to check if a session is active
+    - **Features Provided:**
+        - All core session management features needed by the CLI are present:
+            - Listing sessions
+            - Creating new sessions
+            - Resuming/restoring sessions
+            - Searching sessions
+            - Renaming sessions
+            - Ending sessions
+            - Checking for active session
+        - Methods are async, so CLI will need to await them.
+    - **Potential Gaps/Needed Changes:**
+        - Ensure CLI uses these methods instead of direct DB access.
+        - If CLI needs to access session metadata (name, timestamps, etc.), it should use the results from `get_recent_sessions`, `search_sessions`, or `restore_session`.
+        - If CLI needs to display more detailed session info, may need to extend the metadata returned by these methods.
+        - If CLI needs to handle session selection by index (as in the UI), ensure session lists are ordered and indexed consistently.
+    - **No major missing features identified.**
+
+---
+
+### 3. Refactor CLI to Use `SessionManager`
+- [x] Replace all direct DB or agent session logic in `CLIInterface` with calls to `SessionManager`.
+    - For listing sessions: use `SessionManager.get_recent_sessions()`.
+    - For starting a new session: use `SessionManager.create_session()`.
+    - For resuming a session: use `SessionManager.restore_session(session_id)`.
+    - For searching: use `SessionManager.search_sessions()`.
+- **Notes/Findings:**
+    - The following methods in `CLIInterface` were refactored to use `SessionManager`:
+        - `_get_recent_sessions(self)` now uses `await self.session_manager.get_recent_sessions()`
+        - `_handle_session_start(self)` now uses only `SessionManager` for session logic
+        - `_search_sessions(self)` now uses `await self.session_manager.search_sessions(query)`
+        - `_continue_session(self, session_id)` now uses `await self.session_manager.restore_session(session_id)`
+        - `_start_new_session(self)` now uses `await self.session_manager.create_session(name)`
+    - All direct use of `self.db` for session management in CLI was removed.
+    - All session metadata (name, timestamps, etc.) is now accessed via `SessionManager`.
+    - The CLI's session state (`session_name`, `current_session_id`) is now synced with `SessionManager`.
+    - The CLI constructor and startup sequence were updated to support this refactor.
+    - **Code changes have been made.**
+
+---
+
+### 4. Update CLI Constructor
+- [x] Update `CLIInterface.__init__` to accept and store a `session_manager` argument.
+- [x] Remove any direct DB/session logic from the CLI that is now handled by `SessionManager`.
+- **Notes/Findings:**
+    - The CLI constructor now takes `session_manager` as an argument and stores it as an attribute.
+    - All session management is now handled through `SessionManager`.
+    - No direct DB/session logic remains in the CLI.
+
+---
+
+### 5. Update Startup Sequence
+- [x] In `main.py`, ensure `SessionManager` is created and passed to `CLIInterface`.
+- [x] Remove any redundant or duplicate session logic from the CLI startup.
+- **Notes/Findings:**
+    - The startup sequence now creates a `SessionManager` and passes it to the CLI interface.
+    - All session management is now handled by `SessionManager`; no direct DB/session logic remains in the CLI.
+    - The CLI and SessionManager session state are now always in sync.
+    - The codebase is cleaner and more modular, with session logic centralized.
+
+### 5.1. Database Layer Refactoring (DBManager vs DBService)
+- [x] Review all database operations in both `DatabaseManager` and `DatabaseService`.
+- [x] Clarify DatabaseService is a pure stateless async API for supabase operations
+- [x] Clarify DatabaseManager should focus on coordination, using DatabaseService for actual operations
+- [x] Update method signatures for consistency (all async in `DatabaseService`).
+- [x] Refactor for consistency:
+    - [x] Make all DatabaseService methods async
+    - [x] Have DatabaseManager use DatabaseService for all core operations
+    - [x] Move complex business logic to DatabaseManager
+- [x] Consolidate duplicate functionality and clarify which class is used where.
+- [x] Document the specific responsibilities of each class.
+- [ ] Missing functionality:
+    - [ ] Vector search capabilities for semantic search
+    - [ ] Graph search capabilities for relationship similarity search
+    - [ ] Bulk operations for efficiency
+    - [ ] Migration utilities for schema changes
+    - [x] Health checks and diagnostics methods
+- [x] Implementation plan:
+    - [x] Update DatabaseService to be purely stateless with minimal state
+    - [x] Refactor DatabaseManager to use DatabaseService for all DB operations
+    - [x] Update callers to use the appropriate class based on their needs
+- [x] Update README and docs to reflect the new modular structure.
+- **Notes/Findings:**
+    - Refactored DatabaseManager now follows a clear component-based architecture:
+      - DatabaseService: Stateless service for low-level database operations
+      - Component Managers: Domain-specific managers (MessageManagerDB, ConversationManagerDB)
+      - DatabaseManager: High-level coordinator using composition
+    - Created proper documentation in docs/database_architecture.md with architecture diagram
+    - Added comprehensive unit tests in tests/test_db_manager_refactored.py
+    - Implemented proper error handling at all levels of the architecture
+    - Added consistent type conversion (string/int ID handling)
+    - Added a search_messages method to the DatabaseManager API
+    - Updated error handling in ConversationManagerDB to check existence before updates/deletes
+    - Added both operations success verification for delete_conversation
+    - Updated README.md with a section about the database architecture
+    - The architecture now follows clean code principles:
+      - Clear separation of concerns
+      - Composition over inheritance
+      - Better testability
+      - Consistent error handling
+
+### Phase 5.2: Session and State Management Integration
+- [ ] Ensure SessionManager properly interacts with both DatabaseManager and agent state
+- [ ] Test session persistence across application restarts
+- [ ] Verify message history is properly restored in existing sessions
+
+### Phase 5.3: Final Testing and Documentation
+- [ ] Test the following flows with the updated architecture:
+    - Listing previous sessions
+    - Starting a new session
+    - Resuming a previous session
+    - Searching for sessions
+    - Handling session metadata (names, timestamps, etc.)
+- [ ] Document the refined architecture in the project documentation
+
+This approach keeps the separation between services and managers while clarifying their roles and reducing duplication.
+
+### 6. Test All Session Features
+- [ ] Test the following flows:
+    - Listing previous sessions
+    - Starting a new session
+    - Resuming a previous session
+    - Searching for sessions
+    - Handling session metadata (names, timestamps, etc.)
+- [ ] Ensure all session state is consistent and persists as expected.
+- **Test Results:**
+    - _Record test results and any issues found._

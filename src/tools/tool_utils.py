@@ -5,13 +5,8 @@ from datetime import datetime
 import logging
 import json
 
-from src.graphs.orchestrator_graph import (
-    StateManager,
-    GraphState,
-    MessageRole,
-    TaskStatus,
-    Message
-)
+from src.state.state_manager import StateManager
+from src.state.state_models import GraphState, MessageRole, TaskStatus, Message
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -48,8 +43,8 @@ def execute_tool_with_state(
             "start_time": datetime.now().isoformat()
         })
         
-        # Record tool call in conversation
-        state_manager.update_conversation(
+        # Record tool call in session
+        state_manager.update_session(
             role=MessageRole.TOOL,
             content=f"Calling {tool_name} with task: {task}",
             metadata={
@@ -63,7 +58,7 @@ def execute_tool_with_state(
         result = tool_func(task)
         
         # Record result in state
-        state_manager.update_conversation(
+        state_manager.update_session(
             role=MessageRole.TOOL,
             content=result["message"],
             metadata={
@@ -107,18 +102,18 @@ def execute_tool_with_state(
         }
 
 
-def format_conversation_history(state_manager: StateManager, max_messages: int = 10) -> str:
+def format_session_history(state_manager: StateManager, max_messages: int = 10) -> str:
     """
-    Format the recent conversation history for inclusion in prompts.
+    Format the recent session message history for inclusion in prompts.
     
     Args:
         state_manager: The state manager instance
         max_messages: Maximum number of messages to include
         
     Returns:
-        Formatted conversation history string
+        Formatted session message history string
     """
-    context = state_manager.get_conversation_context(max_messages)
+    context = state_manager.get_session_context(max_messages)
     
     if not context:
         return ""
@@ -165,7 +160,7 @@ def create_tool_node_func(
             task = state.get("current_task", "")
             if not task:
                 # If no specific task, check the last user message
-                last_msg = state_manager.get_conversation_context(1)
+                last_msg = state_manager.get_session_context(1)
                 if last_msg and last_msg[0].role == MessageRole.USER:
                     task = last_msg[0].content
             
@@ -194,49 +189,19 @@ def create_tool_node_func(
     return tool_node
 
 
-def extract_tool_call_from_message(message: Message) -> Optional[Dict[str, Any]]:
+def should_use_tool(message: str, available_tools: list[str]) -> bool:
     """
-    Extract tool call information from a message.
-    
-    Args:
-        message: The message to analyze
-        
-    Returns:
-        Tool call information if found, None otherwise
-    """
-    import re
-    
-    # Simple pattern to match tool calls in format: tool_name(task="description")
-    pattern = r'(\w+)\s*\(\s*task\s*=\s*[\'"]([^\'"]+)[\'"]\s*\)'
-    
-    if not message or not message.content:
-        return None
-    
-    match = re.search(pattern, message.content)
-    if match:
-        return {
-            "tool": match.group(1),
-            "task": match.group(2)
-        }
-    
-    return None
+    Determine if a message should use a tool based on available tools.
 
-
-def should_use_tool(message: Message, available_tools: List[str]) -> Optional[Dict[str, str]]:
-    """
-    Determine if a message should use a tool, and which one.
-    
     Args:
-        message: The message to analyze
-        available_tools: List of available tool names
-        
+        message (str): The message to check.
+        available_tools (list[str]): List of available tool names.
+
     Returns:
-        Dict with tool name and task if a tool should be used, None otherwise
+        bool: True if a tool should be used, False otherwise.
     """
-    # First try to extract explicit tool call
-    tool_call = extract_tool_call_from_message(message)
-    if tool_call and tool_call["tool"] in available_tools:
-        return tool_call
-    
-    # No explicit tool call found
-    return None 
+    from src.tools.llm_integration import ToolParser
+    tool_calls = ToolParser.extract_tool_calls(message)
+    if not tool_calls:
+        return False
+    return any(tc['tool_name'] in available_tools for tc in tool_calls) 

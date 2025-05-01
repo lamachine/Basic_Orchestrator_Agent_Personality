@@ -1,3 +1,3 @@
 """
-Test suite for Basic Orchestrator Agent Personality.
+Tests package for the Basic Orchestrator Agent Personality.
 """ 

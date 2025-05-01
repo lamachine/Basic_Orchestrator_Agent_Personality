@@ -6,85 +6,44 @@ import logging
 import importlib.util
 
 from .tool_registry import ToolRegistry, ToolDescription
-from .valet import valet_tool
-from .personal_assistant import personal_assistant_tool
-from .librarian import librarian_tool
+# from .valet import valet_tool  # (disabled for minimal orchestrator)
+# from .librarian_tool import librarian_tool  # (disabled for minimal orchestrator)
+# from .file_upload_tool import file_upload_tool  # (disabled for minimal orchestrator)
 # from .scrape_web_tool import scrape_web_tool
+from src.tools.tool_utils import create_tool_node_func
+# from .personal_assistant_tool import PersonalAssistantTool  # (disabled for minimal orchestrator)
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
 
-def initialize_tools() -> ToolRegistry:
+def initialize_tools() -> Dict[str, Any]:
     """
-    Initialize and register all tools in a new registry.
+    Initialize all tools.
     
     Returns:
-        Populated ToolRegistry instance
+        Dict containing tool nodes and metadata
     """
-    registry = ToolRegistry()
+    # Create tool nodes
+    tool_nodes = {
+        # "valet": create_tool_node_func(
+        #     name="valet",
+        #     function=valet_tool,
+        #     example="valet(task='Check my schedule for today')"
+        # ),
+        # "personal_assistant": create_tool_node_func(
+        #     name="personal_assistant",
+        #     function=PersonalAssistantTool,
+        #     example="personal_assistant(task='Send email to mom about Sunday plans')"
+        # ),
+        # "librarian": create_tool_node_func(
+        #     name="librarian",
+        #     function=librarian_tool,
+        #     example="librarian(task='Research Pydantic agents')"
+        # )
+    }
     
-    # Register Valet tool
-    registry.register_tool(
-        ToolDescription(
-            name="valet",
-            description=(
-                "Manages household staff, daily schedule, and personal affairs. "
-                "Use this tool to check on staff tasks, your appointments, "
-                "and important personal messages."
-            ),
-            parameters={"task": "Optional[str] - The task or query for the valet"},
-            function=valet_tool,
-            example="valet(task='Check my schedule for today')"
-        )
-    )
-    
-    # Register Personal Assistant tool
-    registry.register_tool(
-        ToolDescription(
-            name="personal_assistant",
-            description=(
-                "Handles communications, task lists, and personal productivity. "
-                "Use this tool to send emails, check messages, and manage to-do lists."
-            ),
-            parameters={"task": "Optional[str] - The task or query for the personal assistant"},
-            function=personal_assistant_tool,
-            example="personal_assistant(task='Send email to mom about Sunday plans')"
-        )
-    )
-    
-    # Register Librarian tool
-    registry.register_tool(
-        ToolDescription(
-            name="librarian",
-            description=(
-                "Performs research, documentation crawling, and knowledge management. "
-                "Use this tool to research topics, gather information, and organize knowledge."
-            ),
-            parameters={"task": "Optional[str] - The research task or query for the librarian"},
-            function=librarian_tool,
-            example="librarian(task='Research Pydantic agents and save the results')"
-        )
-    )
-
-    # Register Web Scraping tool
-    # registry.register_tool(
-    #     ToolDescription(
-    #         name="scrape_web",
-    #         description=(
-    #             "Scrapes websites and web pages for knowledge capture and analysis. "
-    #             "Use this tool to extract information from web pages and store it in the database."
-    #         ),
-    #         parameters={
-    #             "task": "Optional[str] - The URL or description of the web scraping task",
-    #             "request_id": "Optional[int] - Request ID for tracking the scraping operation"
-    #         },
-    #         function=scrape_web_tool,
-    #         example="scrape_web(task='https://example.com/docs')"
-    #     )
-    # )
-    
-    return registry
+    return tool_nodes
 
 
 def get_tool_prompt_section() -> str:

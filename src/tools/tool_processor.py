@@ -22,9 +22,11 @@ that require external resources.
 
 import logging
 from typing import Dict, Any, List, Optional, Union
+from datetime import datetime
+from src.state.state_models import MessageRole
 
 # Setup logging
-from src.services.logging_services.logging_service import get_logger
+from src.services.logging_service import get_logger
 logger = get_logger(__name__)
 
 def process_completed_tool_request(request: Dict[str, Any]) -> str:
@@ -143,31 +145,108 @@ def normalize_tool_response(response: Any) -> Dict[str, Any]:
             "data": None
         }
 
-def extract_tool_calls_from_text(text: str) -> List[Dict[str, str]]:
-    """
-    Extract tool calls from a text response.
-    
-    Args:
-        text: The text to extract tool calls from
-        
-    Returns:
-        List of dictionaries with tool name and task
-    """
-    import re
-    
-    # Pattern to match tool calls in the format: `tool_name(task="task description")`
-    pattern = r"`(\w+)\(task=\"([^\"]+)\"\)`"
-    
-    # Find all matches
-    matches = re.findall(pattern, text)
-    
-    # Convert matches to dictionaries
-    tool_calls = []
-    for match in matches:
-        tool_name, task = match
-        tool_calls.append({
-            "name": tool_name,
-            "task": task
-        })
-    
-    return tool_calls 
+class ToolProcessor:
+    """Manages tool execution and registration for agents."""
+    def __init__(self, tool_registry=None):
+        from src.tools.tool_registry import ToolRegistry
+        self.registry = tool_registry or ToolRegistry()
+
+    async def execute_tools(self, tool_calls: list[dict], graph_state=None) -> list[dict]:
+        """
+        Execute a list of tool calls asynchronously.
+
+        Args:
+            tool_calls (list[dict]): List of tool call specifications.
+            graph_state: Optional graph state for message logging
+
+        Returns:
+            list[dict]: List of tool execution results.
+        """
+        results = []
+        for call in tool_calls:
+            tool_name = call.get("name")
+            params = call.get("parameters", {})
+            
+            # Log tool call if we have graph state
+            if graph_state and "conversation_state" in graph_state:
+                await graph_state["conversation_state"].add_message(
+                    role=MessageRole.TOOL,
+                    content=f"Executing tool {tool_name} with parameters: {params}",
+                    metadata={
+                        "timestamp": datetime.now().isoformat(),
+                        "tool_name": tool_name,
+                        "tool_args": params,
+                        "message_type": "tool_execution"
+                    },
+                    sender="orchestrator_graph.tool_processor",
+                    target=f"orchestrator_graph.{tool_name}"
+                )
+            
+            # If the tool is async, await it; otherwise, call directly
+            tool = self.registry.get_tool(tool_name)
+            if not tool:
+                error_result = {"tool": tool_name, "error": f"Tool '{tool_name}' not found"}
+                results.append(error_result)
+                
+                # Log error if we have graph state
+                if graph_state and "conversation_state" in graph_state:
+                    await graph_state["conversation_state"].add_message(
+                        role=MessageRole.TOOL,
+                        content=f"Tool execution failed: {error_result['error']}",
+                        metadata={
+                            "timestamp": datetime.now().isoformat(),
+                            "tool_name": tool_name,
+                            "message_type": "tool_error",
+                            "error": error_result['error']
+                        },
+                        sender=f"orchestrator_graph.{tool_name}",
+                        target="orchestrator_graph.tool_processor"
+                    )
+                continue
+                
+            func = tool.function
+            try:
+                if hasattr(func, "__call__") and hasattr(func, "__code__") and func.__code__.co_flags & 0x80:
+                    # Coroutine function
+                    result = await func(**params)
+                else:
+                    result = func(**params)
+                    
+                execution_result = {"tool": tool_name, "result": result}
+                results.append(execution_result)
+                
+                # Log successful result if we have graph state
+                if graph_state and "conversation_state" in graph_state:
+                    await graph_state["conversation_state"].add_message(
+                        role=MessageRole.TOOL,
+                        content=f"Tool execution completed: {result}",
+                        metadata={
+                            "timestamp": datetime.now().isoformat(),
+                            "tool_name": tool_name,
+                            "message_type": "tool_result",
+                            "result": result
+                        },
+                        sender=f"orchestrator_graph.{tool_name}",
+                        target="orchestrator_graph.tool_processor"
+                    )
+                    
+            except Exception as e:
+                error_result = {"tool": tool_name, "error": str(e)}
+                results.append(error_result)
+                
+                # Log error if we have graph state
+                if graph_state and "conversation_state" in graph_state:
+                    await graph_state["conversation_state"].add_message(
+                        role=MessageRole.TOOL,
+                        content=f"Tool execution failed: {str(e)}",
+                        metadata={
+                            "timestamp": datetime.now().isoformat(),
+                            "tool_name": tool_name,
+                            "message_type": "tool_error",
+                            "error": str(e)
+                        },
+                        sender=f"orchestrator_graph.{tool_name}",
+                        target="orchestrator_graph.tool_processor"
+                    )
+                    
+        return results 

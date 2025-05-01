@@ -3,29 +3,30 @@
 from typing import Dict, Any, List, Optional, Callable
 import logging
 
-from src.graphs.orchestrator_graph import (
-    GraphState,
-    StateManager,
-    Message,
-    MessageRole
-)
+from src.state.state_manager import StateManager
+from src.state.state_models import Message, MessageRole
 
-from src.tools.valet import valet_tool
-from src.tools.personal_assistant import personal_assistant_tool
-from src.tools.librarian import librarian_tool
+from src.sub_graphs.valet_agent.valet_tool import valet_tool
+from src.sub_graphs.librarian_agent.librarian_tool import librarian_tool
+from src.sub_graphs.personal_assistant_agent.personal_assistant_tool import PersonalAssistantTool
+# from src.sub_graph_personal_assistant.agents.personal_assistant_agent import PersonalAssistantAgent  # (disabled for minimal orchestrator)
 from src.tools.tool_utils import (
     create_tool_node_func,
-    extract_tool_call_from_message,
     should_use_tool
 )
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Define standard tools
+# Define standard tools with lazy loading for personal_assistant
+# def get_personal_assistant_tool():
+#     """Lazy load the personal assistant tool."""
+#     from src.sub_graph_personal_assistant.agents.personal_assistant_agent import PersonalAssistantAgent
+#     return PersonalAssistantAgent
+
 STANDARD_TOOLS = {
     "valet": valet_tool,
-    "personal_assistant": personal_assistant_tool,
+    "personal_assistant": PersonalAssistantTool,
     "librarian": librarian_tool
 }
 
@@ -52,13 +53,13 @@ def create_tool_nodes() -> Dict[str, Callable]:
     return nodes
 
 
-def route_to_tool(state: GraphState) -> str:
+def route_to_tool(state: Dict[str, Any]) -> str:
     """
     Determine which tool to route to based on conversation state.
     This is used as a router function in the graph.
     
     Args:
-        state: The current graph state
+        state: The current graph state dictionary
         
     Returns:
         Name of the tool to route to, or "llm" if no tool is needed
