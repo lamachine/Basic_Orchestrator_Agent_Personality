@@ -88,10 +88,10 @@ class DatabaseMessageService:
             }
             if request_id is not None:
                 record["request_id"] = request_id
-            logger.debug(f"add_message payload: {record}")
+            # logger.debug(f"add_message payload: {record}")
             result = await self.db_service.insert("swarm_messages", record)
             logger.debug(f"add_message DB response: {result}")
-            logger.debug(f"Inserted message into swarm_messages: {result}")
+            # logger.debug(f"Inserted message into swarm_messages: {result}")
             return result
         except Exception as e:
             logger.error(f"Error inserting message into swarm_messages: {e}")
@@ -200,3 +200,42 @@ class DatabaseMessageService:
     def clear_pending_message(self, request_id: str) -> None:
         """Clear a pending message by request ID."""
         self._pending_messages.pop(request_id, None)
+
+# DRY message logging utility
+from src.state.state_models import MessageRole, MessageState
+import logging
+logger = get_logger(__name__)
+
+async def log_and_persist_message(
+    session_state: MessageState,
+    role: MessageRole,
+    content: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    sender: Optional[str] = None,
+    target: Optional[str] = None
+) -> None:
+    """
+    Log, persist, and embed a message in a DRY way.
+    Args:
+        session_state: The MessageState object
+        role: The role of the message sender
+        content: The message content
+        metadata: Optional metadata
+        sender: Required sender string
+        target: Required target string
+    """
+    logger.debug(f"[log_and_persist_message] role={role}, sender={sender}, target={target}, content={content}")
+    if not session_state:
+        logger.warning("[log_and_persist_message] No session_state provided, skipping persistence.")
+        return
+    try:
+        await session_state.add_message(
+            role=role,
+            content=content,
+            metadata=metadata or {},
+            sender=sender,
+            target=target
+        )
+        logger.debug(f"[log_and_persist_message] Message persisted and embedding generated.")
+    except Exception as e:
+        logger.error(f"[log_and_persist_message] Failed to persist message: {e}")

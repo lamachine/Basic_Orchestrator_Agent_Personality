@@ -183,30 +183,4 @@ class PersonalityAgent:
             "diagnostic mode",
             "internal state"
         ]
-        return not any(indicator in prompt.lower() for indicator in diagnostic_indicators)
-
-    def format_tool_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Format a tool result with personality-appropriate language.
-        """
-        if not self.personality:
-            return result
-        if hasattr(self.agent, 'format_tool_result'):
-            result = self.agent.format_tool_result(result)
-        if not isinstance(result, dict) or 'message' not in result:
-            return result
-        try:
-            message = result['message']
-            name = self.get_name()
-            if name in message:
-                return result
-            tool_name = result.get('name', '')
-            if result.get('status') == 'error':
-                result['message'] = f"I'm afraid {message.lower()}"
-            elif tool_name == 'librarian':
-                result['message'] = f"I've found this information: {message}"
-            elif tool_name in ['valet', 'personal_assistant']:
-                result['message'] = f"{message}"
-            return result
-        except Exception:
-            return result 
+        return not any(indicator in prompt.lower() for indicator in diagnostic_indicators) 

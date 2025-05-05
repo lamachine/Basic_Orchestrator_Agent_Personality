@@ -24,6 +24,7 @@ from src.managers.db_manager import DBService
 from src.services.message_service import DatabaseMessageService
 from src.services.logging_service import get_logger
 from src.state.state_models import MessageState
+from src.tools.initialize_tools import discover_and_initialize_tools, get_registry, initialize_tools
 
 logger = get_logger(__name__)
 
@@ -86,8 +87,8 @@ def initialize_agents(config: Configuration, personality_file: Optional[str] = N
         # If personality_file is provided, wrap with PersonalityAgent
         if personality_file:
             llm_agent = PersonalityAgent(llm_agent, personality_file)
-        # Initialize orchestrator agent
-        agent = OrchestratorAgent(config)
+        # Initialize orchestrator agent with personality file if provided
+        agent = OrchestratorAgent(config, personality_file=personality_file)
         return agent, llm_agent
     except Exception as e:
         error_msg = f"Failed to initialize agents: {e}"
@@ -113,6 +114,15 @@ async def run_with_interface(interface_type: str = "cli", session_id: Optional[s
         log_config = config.user_config.get_logging_config() if hasattr(config, 'user_config') else {}
         console_level = log_config.get('console_level', 'INFO')
         logger.debug(f"Logging initialized at {console_level} level (console)")
+        
+        # --- TOOL DISCOVERY AND INITIALIZATION ---
+        discovered = await discover_and_initialize_tools(auto_approve=True)
+        logger.info(f"Newly approved tools this run: {discovered}")
+        registry = get_registry()
+        approved_and_loaded = registry.list_tools()
+        logger.info(f"All approved and loaded tools: {approved_and_loaded}")
+        # Optionally, build/install tool nodes (if needed for your workflow)
+        await initialize_tools()
         
         # Initialize core components
         personality_path = find_personality_file(config, personality_file)

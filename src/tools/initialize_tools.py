@@ -1,48 +1,117 @@
 """Initialize and register all tools."""
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os
 import logging
 import importlib.util
+import asyncio
 
-from .tool_registry import ToolRegistry, ToolDescription
-# from .valet import valet_tool  # (disabled for minimal orchestrator)
-# from .librarian_tool import librarian_tool  # (disabled for minimal orchestrator)
-# from .file_upload_tool import file_upload_tool  # (disabled for minimal orchestrator)
-# from .scrape_web_tool import scrape_web_tool
-from src.tools.tool_utils import create_tool_node_func
-# from .personal_assistant_tool import PersonalAssistantTool  # (disabled for minimal orchestrator)
+from .registry.tool_registry import ToolRegistry
+from .tool_utils import create_tool_node_func
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
+# Global registry instance
+_registry = None
 
-def initialize_tools() -> Dict[str, Any]:
+def get_registry() -> ToolRegistry:
     """
-    Initialize all tools.
+    Get or create the tool registry singleton.
+    
+    Returns:
+        ToolRegistry instance
+    """
+    global _registry
+    if _registry is None:
+        _registry = ToolRegistry()
+    return _registry
+
+
+async def discover_and_initialize_tools(auto_approve: bool = False, prompt_handler=None) -> List[str]:
+    """
+    Discover and initialize tools, optionally prompting for approval.
+    
+    Args:
+        auto_approve: Whether to automatically approve all discovered tools
+        prompt_handler: Optional callback for prompting user about tool approval
+            Function signature: async def handler(tool_name: str, tool_info: dict) -> bool
+            
+    Returns:
+        List of newly approved tool names
+    """
+    registry = get_registry()
+    
+    # Discover tools
+    new_tools = await registry.discover_tools(auto_approve=auto_approve)
+    newly_approved = []
+    
+    # If we have new tools and a prompt handler, ask for approval
+    if new_tools and prompt_handler and not auto_approve:
+        for tool_name in new_tools:
+            tool_info = registry.get_config(tool_name)
+            if not tool_info:
+                continue
+                
+            # Format tool info for display
+            description = tool_info.get("description", "No description available")
+            version = tool_info.get("version", "unknown")
+            capabilities = tool_info.get("capabilities", [])
+            capabilities_str = ", ".join(capabilities) if capabilities else "none specified"
+            
+            # Prompt for approval
+            should_approve = await prompt_handler(
+                tool_name, 
+                {
+                    "description": description,
+                    "version": version,
+                    "capabilities": capabilities_str
+                }
+            )
+            
+            if should_approve:
+                registry.approve_tool(tool_name)
+                newly_approved.append(tool_name)
+                logger.info(f"User approved tool: {tool_name}")
+            else:
+                logger.info(f"User declined tool: {tool_name}")
+    
+    # Log summary
+    all_tools = registry.list_all_discovered_tools()
+    approved_count = sum(1 for approved in all_tools.values() if approved)
+    logger.info(f"Tools initialized: {approved_count} approved out of {len(all_tools)} discovered")
+    
+    return newly_approved
+
+
+async def initialize_tools() -> Dict[str, Any]:
+    """
+    Initialize all approved tools using dynamic discovery.
     
     Returns:
         Dict containing tool nodes and metadata
     """
-    # Create tool nodes
-    tool_nodes = {
-        # "valet": create_tool_node_func(
-        #     name="valet",
-        #     function=valet_tool,
-        #     example="valet(task='Check my schedule for today')"
-        # ),
-        # "personal_assistant": create_tool_node_func(
-        #     name="personal_assistant",
-        #     function=PersonalAssistantTool,
-        #     example="personal_assistant(task='Send email to mom about Sunday plans')"
-        # ),
-        # "librarian": create_tool_node_func(
-        #     name="librarian",
-        #     function=librarian_tool,
-        #     example="librarian(task='Research Pydantic agents')"
-        # )
-    }
+    # Get registry instance
+    registry = get_registry()
     
+    # Make sure tools are discovered
+    await registry.discover_tools()
+    
+    # Create tool nodes for all discovered and approved tools
+    tool_nodes = {}
+    for tool_name in registry.list_tools():
+        tool_class = registry.get_tool(tool_name)
+        tool_config = registry.get_config(tool_name)
+        
+        if tool_class and tool_config:
+            # Create executable tool node function
+            tool_nodes[tool_name] = create_tool_node_func(
+                tool_name,
+                tool_class
+            )
+            logger.info(f"Created tool node for: {tool_name}")
+    
+    logger.info(f"Initialized {len(tool_nodes)} tool nodes")
     return tool_nodes
 
 
@@ -53,8 +122,11 @@ def get_tool_prompt_section() -> str:
     Returns:
         String containing tool descriptions formatted for inclusion in prompts
     """
-    registry = initialize_tools()
-    tools = registry.list_tools()
+    registry = get_registry()
+    tool_names = registry.list_tools()
+    
+    if not tool_names:
+        return "\n\n# AVAILABLE TOOLS\n\nNo tools are currently available."
     
     prompt_section = """
 # AVAILABLE TOOLS
@@ -63,12 +135,15 @@ You have access to the following tools to help with your tasks. Use the appropri
 
 """
     
-    for tool in tools:
-        prompt_section += f"""
-## {tool.name}
-{tool.description}
+    for tool_name in tool_names:
+        tool_config = registry.get_config(tool_name)
+        if tool_config:
+            description = tool_config.get("description", "No description available")
+            prompt_section += f"""
+## {tool_name}
+{description}
 
-Example: `{tool.example}`
+Example: `{{"name": "{tool_name}", "args": {{"task": "Example task"}}}}`
 """
     
     prompt_section += """
@@ -84,7 +159,7 @@ For example:
     return prompt_section
 
 
-def initialize_tool_dependencies(llm_agent=None) -> Dict[str, bool]:
+async def initialize_tool_dependencies(llm_agent=None) -> Dict[str, bool]:
     """
     Initialize dependencies for specialized tools.
     
@@ -96,21 +171,7 @@ def initialize_tool_dependencies(llm_agent=None) -> Dict[str, bool]:
     """
     initializations = {}
     
-    # Initialize GitHub adapter if available
-    # try:
-    #     from src.utils.github_adapter import set_llm_agent
-    #     if llm_agent:
-    #         set_llm_agent(llm_agent)
-    #         logger.debug("GitHub adapter initialized with LLM agent")
-    #         initializations["github_adapter"] = True
-    #     else:
-    #         logger.warning("GitHub adapter initialization skipped - no LLM agent provided")
-    #         initializations["github_adapter"] = False
-    # except ImportError as e:
-    #     logger.debug(f"GitHub adapter not available: {e}")
-    #     initializations["github_adapter"] = False
-
-    # Initialize librarian dependencies
+    # Initialize OpenAI dependency for librarian tools
     try:
         spec = importlib.util.find_spec('openai')
         if spec is not None:
@@ -133,13 +194,6 @@ def initialize_tool_dependencies(llm_agent=None) -> Dict[str, bool]:
     #     logger.debug("MCP client not available")
     #     initializations["mcp_client"] = False
     
-    # Check for GitHub token for scraping repos
-    # if os.getenv("GITHUB_TOKEN"):
-    #     logger.debug("GitHub token found for repository scraping")
-    #     initializations["github_token"] = True
-    # else:
-    #     logger.warning("No GitHub token found - repository scraping may be limited")
-    #     initializations["github_token"] = False
     
     # Log initialization summary
     initialized = sum(1 for status in initializations.values() if status)
@@ -147,3 +201,50 @@ def initialize_tool_dependencies(llm_agent=None) -> Dict[str, bool]:
     logger.debug(f"Tool dependencies initialization: {initialized}/{total} successful")
     
     return initializations 
+
+
+# Console-based prompt handler for approving tools (for testing)
+async def console_prompt_handler(tool_name: str, tool_info: Dict[str, Any]) -> bool:
+    """
+    Command-line handler for tool approval prompts.
+    
+    Args:
+        tool_name: Name of the tool
+        tool_info: Tool information dictionary
+        
+    Returns:
+        True if the tool should be approved, False otherwise
+    """
+    print("\n=== New Tool Discovered ===")
+    print(f"Name: {tool_name}")
+    print(f"Description: {tool_info['description']}")
+    print(f"Version: {tool_info['version']}")
+    print(f"Capabilities: {tool_info['capabilities']}")
+    print("==========================")
+    
+    while True:
+        response = input("Approve this tool? (yes/no): ").lower()
+        if response in ("yes", "y"):
+            return True
+        elif response in ("no", "n"):
+            return False
+        else:
+            print("Please enter 'yes' or 'no'")
+
+
+# Example usage
+if __name__ == "__main__":
+    # Set up basic logging
+    logging.basicConfig(level=logging.INFO)
+    
+    # Run discovery and initialization
+    asyncio.run(discover_and_initialize_tools(prompt_handler=console_prompt_handler))
+    tool_nodes = asyncio.run(initialize_tools())
+    
+    print(f"Initialized {len(tool_nodes)} tool nodes:")
+    for name in tool_nodes:
+        print(f"- {name}")
+        
+    # Print tool prompt section
+    print("\nTool Prompt Section:")
+    print(get_tool_prompt_section()) 

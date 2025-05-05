@@ -8,6 +8,11 @@ from datetime import datetime, timezone
 from typing import Optional, Union
 import logging
 from enum import Enum
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+    logging.warning("zoneinfo not available; local time will default to UTC.")
 
 logger = logging.getLogger(__name__)
 
@@ -124,4 +129,31 @@ def is_valid_iso_format(dt_str: str) -> bool:
         parse_datetime(dt_str)
         return True
     except Exception:
-        return False 
+        return False
+
+def get_local_datetime(timezone_str: str) -> datetime:
+    """
+    Get the current local datetime for the given IANA timezone string.
+    Falls back to UTC if zoneinfo is unavailable or timezone is invalid.
+    Args:
+        timezone_str (str): IANA timezone string (e.g., 'America/Los_Angeles')
+    Returns:
+        datetime: Local datetime (timezone-naive)
+    """
+    if ZoneInfo is not None:
+        try:
+            dt = datetime.now(ZoneInfo(timezone_str))
+            return dt.replace(tzinfo=None)
+        except Exception as e:
+            logger.warning(f"Invalid timezone '{timezone_str}': {e}. Falling back to UTC.")
+    return datetime.utcnow()
+
+def get_local_datetime_str(timezone_str: str) -> str:
+    """
+    Get the current local datetime as a formatted string for the given timezone.
+    Args:
+        timezone_str (str): IANA timezone string
+    Returns:
+        str: ISO 8601 formatted local datetime string
+    """
+    return get_local_datetime(timezone_str).isoformat() 

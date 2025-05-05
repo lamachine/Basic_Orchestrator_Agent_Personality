@@ -71,6 +71,7 @@ class BaseAgent:
             return "Error: LLM service not initialized"
             
         try:
+            self.logger.debug(f"BaseAgent.query_llm: Prompt being sent to LLM:\n{prompt}")
             return await self.llm.generate(prompt)
         except Exception as e:
             self.logger.error(f"Error querying LLM: {e}")

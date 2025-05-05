@@ -53,18 +53,20 @@ DEFAULT_CONFIG = {
         'service_role_key': '',     # Supabase service role key (leave empty to use env var)
     },
     
-    # Functional agents configuration
+    # Tool agents configuration
     'agents': {
-        'enabled': ['librarian', 'valet', 'personal_assistant'],  # Enabled agents
-        # Agent-specific configuration
-        'librarian': {
+        # List of enabled tool agents (should match directory names in src/sub_graphs/)
+        'enabled': ['librarian_agent', 'valet_agent', 'personal_assistant_agent'],
+        
+        # Agent-specific configuration (will be merged with tool_config.yaml from each agent)
+        'librarian_agent': {
             'use_web_search': True,
             'max_references': 5,
         },
-        'valet': {
+        'valet_agent': {
             'check_frequency_seconds': 300,  # How often to check for tasks
         },
-        'personal_assistant': {
+        'personal_assistant_agent': {
             'default_timezone': 'UTC',
         },
     },
@@ -74,6 +76,8 @@ DEFAULT_CONFIG = {
         'debug_mode': False,        # Enable debug mode
         'user_id': 'developer',     # Default user ID
         'session_timeout_minutes': 30,  # Session timeout in minutes
+        'location': 'San Jose, CA',     # User location
+        'timezone': 'America/Los_Angeles',  # User timezone (IANA tz name)
     },
     
     # Personality agent settings
@@ -320,6 +324,22 @@ class UserConfig:
                     db_config[key] = '***REDACTED***'
                     
         return f"UserConfig(path={self.config_path}, config={safe_config})"
+
+    def get_timezone(self) -> str:
+        """
+        Get the user's timezone (IANA tz name).
+        Returns:
+            str: Timezone string (e.g., 'America/Los_Angeles')
+        """
+        return self.config.get('general', {}).get('timezone', 'UTC')
+
+    def get_location(self) -> str:
+        """
+        Get the user's location (city, region, etc).
+        Returns:
+            str: Location string
+        """
+        return self.config.get('general', {}).get('location', 'Unknown')
 
 # Helper function to get configuration
 def get_user_config() -> UserConfig:

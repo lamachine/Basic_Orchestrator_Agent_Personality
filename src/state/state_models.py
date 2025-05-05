@@ -102,7 +102,9 @@ class MessageState(BaseModel):
             If db_manager is set, this will also persist the message to the database.
         """
         if not sender or not target:
+            logger.error(f"[add_message] sender or target missing: sender={sender}, target={target}")
             raise ValueError("Both sender and target must be provided for message persistence.")
+        logger.debug(f"[add_message] Adding message: sender={sender}, target={target}, role={role}, content={content}")
         message = Message(
             role=role,
             content=content,
@@ -112,6 +114,7 @@ class MessageState(BaseModel):
         self.last_updated = datetime.now()
         if self.db_manager and hasattr(self.db_manager, 'message_manager'):
             try:
+                logger.debug(f"[add_message] Persisting message to DB and generating embedding: session_id={self.session_id}, sender={sender}, target={target}")
                 await self.db_manager.message_manager.add_message(
                     session_id=self.session_id,
                     role=role,
@@ -121,9 +124,12 @@ class MessageState(BaseModel):
                     sender=sender,
                     target=target
                 )
+                logger.debug(f"[add_message] Message persisted and embedding generated successfully.")
             except Exception as e:
-                logger.warning(f"Failed to persist message to database: {e}")
+                logger.warning(f"[add_message] Failed to persist message to database: {e}")
                 # Continue even if database persistence fails
+        else:
+            logger.debug(f"[add_message] No db_manager or message_manager, message only added to memory.")
         return message
 
     def get_last_message(self) -> Optional[Message]:

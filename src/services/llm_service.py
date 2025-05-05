@@ -22,6 +22,8 @@ import httpx
 from typing import Dict, Any, List, Optional
 from src.config.llm_config import EMBEDDING_MODEL, LLM_MODEL, LLM_PROVIDER, OLLAMA_HOST
 import ollama
+import uuid
+import traceback
 
 # Import OllamaClient for embeddings
 from ollama import Client as OllamaClient
@@ -130,6 +132,16 @@ class LLMService:
         try:
             # Log request details
             target_model = model or self.model
+            # Get temperature and context_window from config if available
+            from src.config.llm_config import get_llm_config
+            llm_config = get_llm_config()
+            temperature = getattr(llm_config, 'temperature', 0.1)
+            context_window = getattr(llm_config, 'context_window', 16384)
+            # Try to get per-model settings if available
+            if hasattr(llm_config, 'models') and 'conversation' in llm_config.models:
+                conversation_cfg = llm_config.models['conversation']
+                temperature = conversation_cfg.get('temperature', temperature)
+                context_window = conversation_cfg.get('context_window', context_window)
             if not self.api_url.rstrip('/').endswith('/api'):
                 endpoint = f"{self.api_url.rstrip('/')}/api/generate"
             else:
@@ -137,7 +149,9 @@ class LLMService:
             payload = {
                 "model": target_model,
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "temperature": temperature,
+                "context_window": context_window
             }
             
             # Detailed request logging
@@ -242,6 +256,7 @@ class LLMService:
         Returns:
             str: The LLM's response
         """
+        logger.debug(f"LLMService.generate: Prompt received:\n{prompt}")
         return await self.generate(prompt)
 
     async def get_embedding(self, text: str, model: Optional[str] = None) -> List[float]:
@@ -255,15 +270,17 @@ class LLMService:
         Returns:
             List[float]: Embedding vector
         """
+        request_id = str(uuid.uuid4())
+        logger.debug(f"[EMBED] [{request_id}] Embedding request for text: '{text[:50]}'... (len={len(text)}) model={model}")
         try:
             embedding_model = model or os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-            logger.debug(f"Generating embedding using model: {embedding_model}")
+            logger.debug(f"[EMBED] [{request_id}] Generating embedding using model: {embedding_model}")
             try:
                 if not self.api_url.rstrip('/').endswith('/api'):
                     endpoint = f"{self.api_url.rstrip('/')}/api/embeddings"
                 else:
                     endpoint = f"{self.api_url.rstrip('/')}/embeddings"
-                logger.debug(f"Using embeddings endpoint: {endpoint}")
+                logger.debug(f"[EMBED] [{request_id}] Using embeddings endpoint: {endpoint}")
                 response = await self.client.post(
                     endpoint,
                     json={
@@ -271,23 +288,20 @@ class LLMService:
                         "prompt": text
                     }
                 )
-                logger.debug(f"Embedding response status: {response.status_code}")
-                logger.debug(f"Embedding response content: {response.text}")
+                logger.debug(f"[EMBED] [{request_id}] Embedding response status: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
-                logger.debug(f"Raw embedding response: {data}")
                 if 'embedding' in data:
                     embedding = data['embedding']
-                    logger.debug(f"Successfully generated embedding of length: {len(embedding)}")
+                    logger.debug(f"[EMBED] [{request_id}] Successfully generated embedding of length: {len(embedding)}. First 5 values: {embedding[:5]}")
                     return embedding
                 else:
-                    logger.error(f"Invalid embedding response: {data}")
                     raise ValueError("No embedding in response")
             except Exception as embed_error:
-                logger.error(f"Error during embedding generation: {embed_error}")
-                logger.error(f"Embedding response content: {getattr(embed_error, 'response', None)}")
-                logger.error("This might indicate the embedding model is not properly loaded")
-                logger.debug(f"Attempting to pull model {embedding_model}...")
+                logger.error(f"[EMBED] [{request_id}] Error during embedding generation: {embed_error}")
+                logger.error(f"[EMBED] [{request_id}] This might indicate the embedding model is not properly loaded")
+                logger.error(f"[EMBED] [{request_id}] Stack trace:\n{traceback.format_exc()}")
+                logger.debug(f"[EMBED] [{request_id}] Attempting to pull model {embedding_model}...")
                 try:
                     if not self.api_url.rstrip('/').endswith('/api'):
                         pull_endpoint = f"{self.api_url.rstrip('/')}/api/pull"
@@ -297,10 +311,10 @@ class LLMService:
                         pull_endpoint,
                         json={"name": embedding_model}
                     )
-                    logger.debug(f"Pull response status: {pull_response.status_code}")
-                    logger.debug(f"Pull response content: {pull_response.text}")
+                    logger.debug(f"[EMBED] [{request_id}] Pull response status: {pull_response.status_code}")
+                    logger.debug(f"[EMBED] [{request_id}] Pull response content: {pull_response.text}")
                     pull_response.raise_for_status()
-                    logger.debug(f"Successfully pulled {embedding_model}, retrying embedding...")
+                    logger.debug(f"[EMBED] [{request_id}] Successfully pulled {embedding_model}, retrying embedding...")
                     response = await self.client.post(
                         endpoint,
                         json={
@@ -308,21 +322,23 @@ class LLMService:
                             "prompt": text
                         }
                     )
-                    logger.debug(f"Retry embedding response status: {response.status_code}")
-                    logger.debug(f"Retry embedding response content: {response.text}")
+                    logger.debug(f"[EMBED] [{request_id}] Retry embedding response status: {response.status_code}")
                     response.raise_for_status()
                     data = response.json()
                     if 'embedding' in data:
+                        logger.debug(f"[EMBED] [{request_id}] Successfully generated embedding on retry.")
                         return data['embedding']
                     else:
-                        logger.error(f"Invalid embedding response after pull: {data}")
+                        logger.error(f"[EMBED] [{request_id}] Invalid embedding response after pull: {data}")
                         raise ValueError("No embedding in response after pull")
                 except Exception as pull_error:
-                    logger.error(f"Error pulling model: {pull_error}")
-                    logger.error(f"Pull response content: {getattr(pull_error, 'response', None)}")
+                    logger.error(f"[EMBED] [{request_id}] Error pulling model: {pull_error}")
+                    logger.error(f"[EMBED] [{request_id}] Pull response content: {getattr(pull_error, 'response', None)}")
+                    logger.error(f"[EMBED] [{request_id}] Stack trace (pull):\n{traceback.format_exc()}")
                     raise RuntimeError(f"Failed to pull embedding model {embedding_model}: {pull_error}")
         except Exception as e:
-            logger.error(f"Error calculating embedding: {e}")
+            logger.error(f"[EMBED] [{request_id}] Error calculating embedding: {e}")
+            logger.error(f"[EMBED] [{request_id}] Stack trace (outer):\n{traceback.format_exc()}")
             logger.error("Falling back to zero vector and raising exception")
             raise RuntimeError(f"Embedding generation failed: {e}")
 

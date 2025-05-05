@@ -19,14 +19,15 @@ DEFAULT_LLM_CONFIG = {
     'provider': LLM_PROVIDER,
     'api_url': OLLAMA_HOST,
     'default_model': LLM_MODEL,
-    'temperature': 0.2,
+    'temperature': 0.1,
     'max_tokens': 4096,
     'context_window': 16384,
     'models': {
         'conversation': {
             'model': LLM_MODEL,
-            'temperature': 0.7,
+            'temperature': 0.1,
             'max_tokens': 2048,
+            'context_window': 16384,
             'system_prompt': 'You are a helpful assistant named Rose.'
         },
         'coding': {

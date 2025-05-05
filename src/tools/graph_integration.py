@@ -5,55 +5,55 @@ import logging
 
 from src.state.state_manager import StateManager
 from src.state.state_models import Message, MessageRole
-
-from src.sub_graphs.valet_agent.valet_tool import valet_tool
-from src.sub_graphs.librarian_agent.librarian_tool import librarian_tool
-from src.sub_graphs.personal_assistant_agent.personal_assistant_tool import PersonalAssistantTool
-# from src.sub_graph_personal_assistant.agents.personal_assistant_agent import PersonalAssistantAgent  # (disabled for minimal orchestrator)
-from src.tools.tool_utils import (
-    create_tool_node_func,
-    should_use_tool
-)
+from src.tools.initialize_tools import get_registry
+from src.tools.tool_utils import should_use_tool, create_tool_node_func
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Define standard tools with lazy loading for personal_assistant
-# def get_personal_assistant_tool():
-#     """Lazy load the personal assistant tool."""
-#     from src.sub_graph_personal_assistant.agents.personal_assistant_agent import PersonalAssistantAgent
-#     return PersonalAssistantAgent
-
-STANDARD_TOOLS = {
-    "valet": valet_tool,
-    "personal_assistant": PersonalAssistantTool,
-    "librarian": librarian_tool
-}
-
-def get_available_tools() -> Dict[str, Callable]:
+async def get_available_tools() -> Dict[str, Callable]:
     """
-    Get the dictionary of available tools.
+    Get the dictionary of available tools from the registry.
     
     Returns:
         Dictionary mapping tool names to their functions
     """
-    return STANDARD_TOOLS
+    registry = get_registry()
+    # Make sure tools are discovered
+    if not registry.list_tools():
+        await registry.discover_tools()
+    
+    tools = {}
+    for tool_name in registry.list_tools():
+        tools[tool_name] = registry.get_tool(tool_name)
+    
+    return tools
 
 
-def create_tool_nodes() -> Dict[str, Callable]:
+async def create_tool_nodes() -> Dict[str, Callable]:
     """
-    Create graph node functions for all standard tools.
+    Create graph node functions for all discovered tools.
     
     Returns:
         Dictionary mapping tool names to their node functions
     """
     nodes = {}
-    for tool_name, tool_func in STANDARD_TOOLS.items():
-        nodes[tool_name] = create_tool_node_func(tool_name, tool_func)
+    registry = get_registry()
+    
+    # Make sure tools are discovered
+    if not registry.list_tools():
+        await registry.discover_tools()
+    
+    for tool_name in registry.list_tools():
+        tool_class = registry.get_tool(tool_name)
+        if tool_class:
+            nodes[tool_name] = create_tool_node_func(tool_name, tool_class)
+            logger.debug(f"Created node function for tool: {tool_name}")
+    
     return nodes
 
 
-def route_to_tool(state: Dict[str, Any]) -> str:
+async def route_to_tool(state: Dict[str, Any]) -> str:
     """
     Determine which tool to route to based on conversation state.
     This is used as a router function in the graph.
@@ -77,8 +77,12 @@ def route_to_tool(state: Dict[str, Any]) -> str:
     if latest_message.role != MessageRole.ASSISTANT:
         return "llm"
     
+    # Get available tools
+    registry = get_registry()
+    available_tools = registry.list_tools()
+    
     # Check if the message contains a tool call
-    tool_info = should_use_tool(latest_message, list(STANDARD_TOOLS.keys()))
+    tool_info = should_use_tool(latest_message, available_tools)
     
     if tool_info:
         return tool_info["tool"]
@@ -86,7 +90,7 @@ def route_to_tool(state: Dict[str, Any]) -> str:
     return "llm"
 
 
-def setup_graph_routing(graph, llm_node_name="llm") -> None:
+async def setup_graph_routing(graph, llm_node_name="llm") -> None:
     """
     Set up the routing for tools in a StateGraph.
     
@@ -95,11 +99,12 @@ def setup_graph_routing(graph, llm_node_name="llm") -> None:
         llm_node_name: The name of the LLM node (default 'llm')
     """
     # Create tool nodes
-    tool_nodes = create_tool_nodes()
+    tool_nodes = await create_tool_nodes()
     
     # Add tool nodes to graph
     for tool_name, node_func in tool_nodes.items():
         graph.add_node(tool_name, node_func)
+        logger.debug(f"Added tool node to graph: {tool_name}")
     
     # Set up routing from llm node
     graph.add_conditional_edges(
@@ -113,4 +118,5 @@ def setup_graph_routing(graph, llm_node_name="llm") -> None:
     
     # Route all tool nodes back to llm node
     for tool_name in tool_nodes.keys():
-        graph.add_edge(tool_name, llm_node_name) 
+        graph.add_edge(tool_name, llm_node_name)
+        logger.debug(f"Added edge from {tool_name} back to {llm_node_name}") 

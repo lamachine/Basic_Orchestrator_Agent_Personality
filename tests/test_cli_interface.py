@@ -281,6 +281,25 @@ class TestCLIInterface(unittest.TestCase):
                 self.assertEqual(self.interface.buffer, "test")
                 mock_write.assert_called_once_with('t')
                 mock_flush.assert_called_once()
+    
+    def test_display_tools_lists_registry_tools(self):
+        """Test that the CLI 'tools' command lists tools from the registry, not a hardcoded list."""
+        # Setup: Patch get_registry to return a mock registry
+        with patch('src.ui.cli.get_registry') as mock_get_registry, \
+             patch.object(self.interface, 'display_message') as mock_display:
+            mock_registry = MagicMock()
+            mock_registry.list_tools.return_value = ['foo', 'bar']
+            mock_registry.get_config.side_effect = lambda name: {"description": f"desc for {name}"}
+            mock_get_registry.return_value = mock_registry
+
+            # Exercise: Call the CLI's _display_tools method
+            import asyncio
+            asyncio.run(self.interface._display_tools())
+
+            # Verify: Output matches the registry, not a hardcoded list
+            mock_display.assert_any_call("\nAvailable Tools:")
+            mock_display.assert_any_call("- foo: desc for foo")
+            mock_display.assert_any_call("- bar: desc for bar")
 
 if __name__ == '__main__':
     unittest.main() 

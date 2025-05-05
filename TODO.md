@@ -1,8 +1,4 @@
-## Refactor and Modularize Codebase
 
-To refactor and modularize your codebase for better organization and readability, we can follow a structured plan. This plan will involve moving components into appropriate directories and creating test files to ensure functionality is maintained. Here's a detailed implementation plan:
-
-### Implementation Plan
 
 #### 1. CLI Separation
 - Done
@@ -19,12 +15,22 @@ To refactor and modularize your codebase for better organization and readability
     - **Failure Case**: Test with missing or incorrect configurations.
     - **Edge Case**: Test with boundary values or unexpected inputs.
 
+#### x.  Separate all configuration from structure?
+- **Objective**: Investigate the possiblity of have support modules and config modules just like we have tool modules.  Make a configuration that pulls all orchestrator specific code out, so there is just one graph instead of one for tools and one for orchestrator.  
+- **Background**:  This is a standard way to organize code.  The LLM, logging, and database will be moved into their own respective services.  Additional LLM and database services will be added but local Ollama and Supabase services will remain primary.  
+- **Action**:
+  - Investigate how complex this would be to implement, and when.  
+  - One single set of instrucitons, and possibly one very generic "tool" that will walk through the setup options, i.e. LLM, database, logging location, personality options, state, etc.  
+
 #### 3. LLM, Logging, and DB Services
 - **Objective**: Organize LLM, logging, and database code into service modules.
 - **Background**:  This is a standard way to organize code.  The LLM, logging, and database will be moved into their own respective services.  Additional LLM and database services will be added but local Ollama and Supabase services will remain primary.  
 - **Action**:
   - Use the existing directories `src/services/llm_services/`, `src/services/logging_services/`, and `src/services/db_services/`.
   - Move LLM-related code to `src/services/llm_services/`, logging setup to `src/services/logging_services/`, and database management to `src/services/db_services/`.
+   - Changed logging single DRY service
+   - Changed prefix to variable, but need to add in config
+   - Need to change nodes to variable names so they are picked up if and when the config changes.
 - **Testing**:
   - Create `tests/test_llm.py`, `tests/test_logging.py`, and `tests/test_db.py` with:
     - **Success Case**: Verify that each service initializes and operates correctly.

@@ -1,4 +1,20 @@
+# Configuration for enabling tool agents
+# Tools will be dynamically discovered from sub_graphs directory
+
+# List of enabled tool agents
+# These names should match the directory names in src/sub_graphs/
 enabled_tools:
   - valet_agent
   - personal_assistant_agent
-  - librarian_agent 
+  - librarian_agent
+
+# Global settings for all tools
+tool_settings:
+  # Maximum time in seconds to wait for a tool response
+  timeout_seconds: 30
+  
+  # Whether to log tool executions for debugging
+  log_executions: true
+  
+  # Default response format
+  default_response_format: "json" 
