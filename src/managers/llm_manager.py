@@ -15,6 +15,7 @@ from openai import AsyncOpenAI
 
 from src.services.llm_service import LLMService
 from src.services.logging_service import get_logger
+from src.config.llm_config import get_provider_config
 
 logger = get_logger(__name__)
 
@@ -49,3 +50,24 @@ class LLMManager:
 class PydanticAIDeps:
     supabase: Client
     openai_client: AsyncOpenAI
+
+    def choose_provider(self, query_type: str, token_balances: dict, user_id: str = None):
+        """
+        Decide which LLM provider to use for a given query.
+        """
+        # Example logic, expand as needed
+        if query_type == "code":
+            return get_provider_config("ollama")
+        elif token_balances.get("anthropic", 0) < 1000:
+            return get_provider_config("openai")
+        else:
+            return get_provider_config("anthropic")
+
+    def get_service_for_query(self, query_type: str, token_balances: dict, user_id: str = None):
+        """
+        Return an LLMService instance configured for the chosen provider.
+        """
+        provider_cfg = self.choose_provider(query_type, token_balances, user_id)
+        # You may want to add logic here to instantiate the correct service class
+        # For now, assume Ollama/OpenAI both use LLMService with different configs
+        return LLMService(api_url=provider_cfg.api_url, model=provider_cfg.default_model)

@@ -17,8 +17,8 @@ from src.services.db_services.db_manager import (
 def mock_config():
     """Mock configuration for testing."""
     return Configuration(
-        ollama_api_url='http://test:11434',
-        ollama_model='test-model',
+        api_url='http://test:11434',
+        default_model='test-model',
         file_level='DEBUG',
         console_level='INFO'
     )

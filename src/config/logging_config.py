@@ -1,10 +1,16 @@
-"""Logging configuration for the application."""
+"""
+Logging configuration for the application.
+
+# Most common/preferred: file_level, console_level, log_dir, max_log_size_mb, backup_count
+"""
 
 import logging
 import os
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from typing import Dict, Any, Optional
+from pydantic import BaseModel, ValidationError
+import yaml
 
 # Default logging configuration
 DEFAULT_CONFIG = {
@@ -44,6 +50,33 @@ NOISY_LOGGERS = [
     "asyncio",
     "charset_normalizer"
 ]
+
+class LoggingConfig(BaseModel):
+    file_level: str = "DEBUG"
+    console_level: str = "INFO"
+    log_dir: str = "./logs"
+    max_log_size_mb: int = 10
+    backup_count: int = 5
+
+def get_logging_config(config_path: str = 'src/config/developer_user_config.yaml') -> LoggingConfig:
+    """
+    Load and validate logging config from YAML using Pydantic.
+    Args:
+        config_path (str): Path to YAML config file.
+    Returns:
+        LoggingConfig: Validated logging config.
+    Raises:
+        ValueError: If config is invalid.
+    """
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f) or {}
+        section = config.get('logging', {})
+        try:
+            return LoggingConfig(**section)
+        except ValidationError as e:
+            raise ValueError(f"Invalid logging config: {e}")
+    return LoggingConfig()
 
 def get_log_config(config=None):
     """

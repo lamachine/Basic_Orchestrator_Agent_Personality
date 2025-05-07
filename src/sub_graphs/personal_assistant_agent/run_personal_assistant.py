@@ -9,9 +9,8 @@ from services.logging_service import get_logger, setup_logging
 
 # Set up logging with debug level for both file and console
 setup_logging({
-    'log_level': 'DEBUG',
-    'console_log_level': 'DEBUG',
-    'file_log_level': 'DEBUG'
+    'file_level': 'DEBUG',
+    'console_level': 'DEBUG',
 })
 
 logger = get_logger(__name__)

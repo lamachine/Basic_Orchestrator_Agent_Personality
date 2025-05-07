@@ -360,6 +360,65 @@ Initial development will use the sub_graph paradigm with message passing, levera
 
 agents/orchestrator_agent.py
     --> agents/personal_assistant_agent.py
+    1. Simplicity & Zen
+    Simplicity: The class is focused: it coordinates user requests, LLM chat, and tool calls. No unnecessary logic.
+    Zen: Clear separation of concerns. Tool logic is delegated, not embedded. Personality is optional and modular.
+    2. Graph-Function Specific Code
+    orchestrator_only:
+    The use of self.graph_name and logging with orchestrator-specific sender/target is graph-specific.
+    The prompt includes orchestrator-specific context (time, location, system prompt).
+    Tool call routing is generic, but the logging and naming are orchestrator-centric.
+    What could be moved to a template?
+    The base agent logic (history, prompt creation, LLM query) is generic and could be in a template.
+    The tool call extraction and async handling are also generic and could be abstracted.
+    The only truly orchestrator-specific parts are the default names, logging sender/target, and maybe the system prompt.
+    3. Modularity
+    The agent is modular: personality, tool logic, and LLM are all pluggable.
+    Stubs for future tool/personality logic are present but commented out.
+    4. What to Template?
+    The following could be moved to a template agent:
+    The async message processing pattern (with tool call detection and async execution).
+    The conversation history and prompt creation logic.
+    The logging pattern, with sender/target as variables.
+    The structure for optional personality injection.
+    The template should use generic names (e.g., self.graph_name, self.agent_name) and allow subclasses to override context, system prompt, and logging details.
+    Conclusion:
+    This file is a good candidate for a master template. The only orchestrator-specific code is in naming and logging. The rest is generic and can be parameterized for sub-graph agents.
+    Next step suggestion:
+    Extract a generic version of this class for template_agent, replacing orchestrator-specific names with placeholders or variables.
+    Add a dummy tool call handler for template testing.
+
+
+
+config/graph_config.py (created)
+    --> config/personal_assistant_config.py renamed to graph_config.py
+
+  working notes
+      What make the orchestrator unique? goes in graph_config.py
+
+      LLM configs - conversation Y, reasoning N, tools Y, encoding Y
+
+      Database configs - sql Y, vector Y, state N, knowledge_graph N
+
+      conversation Y,
+      personality Y,
+
+      System prompt.
+
+      What do all tool agent graphs have?
+
+      conversation_config or hooks
+          personality_config (only if using conversation_config)
+
+      LLM - options are use parent, use local (ollama in our case), or use remote (openrouter.ai) goes in llm_config.py
+
+      Database - options are use parent, use local (supabase in our case), or use remote (supabase web) do we need graph_config.py?
+
+      State - tie into parent, tie into local functions, or stand alone (i.e. MCP)
+
+      Logging config seems unique to me, including db schema.  what do we do with this?
+          
+      User_config, use parent, or use local  (need this for line level security)
 
 graphs/orchestrator_graph.py
     --> graphs/personal_assistant_graph.py
@@ -411,4 +470,87 @@ tests/test_orchestrator_tools.py
 
 # For any file not present in the sub-graph, the orchestrator's version is used by default.
 # As sub-graphs mature, they should implement their own versions as needed for modularity.
+
+
+
+
+1. What Every Graph Needs (Generic/Template)
+graph_name: Unique name for the graph/agent (from config).
+system_prompt: Default system prompt (from config).
+llm_config: How to access LLM (parent, local, remote).
+db_config: How to access DB (parent, local, remote).
+state_config: State management (parent, local, stand-alone).
+logging_config: Logging level, file, etc.
+user_config: User/role/line-level security (parent/local).
+tool_registry_config: How to discover/approve tools.  --NO.  Tool registry is a core function of all the graphs.
+These should be in a generic config class (e.g., GraphConfig), with sensible defaults and the ability to override via env or file.  -- That was my thought, but is this getting too complex?  Perhaps different sections in the same config file?  .i.e. does this graph use this feature?  How is this graph configured to use it?
+2. What Makes the Orchestrator Unique
+Role: Only the orchestrator talks to the user directly.  -- How is this different than the prompt?
+Personality: May inject personality into prompts.
+Sub-graph Coordination: Assigns tasks to sub-graphs/tools.  -- Again, core function of all graphs.
+Conversation Management: Maintains user-facing conversation state.  -- Not needed.  If it uses conversation, it must use conversation state and persistant memory.  Perhaps add these requirements as a note to the conversation config.
+System prompt: More complex, may include instructions for tool/agent routing.  -- Agreed, and I missed this, good catch.
+These should be in orchestrator-specific config fields or a subclass (e.g., OrchestratorConfig(GraphConfig)). -- Yes, see above comment for tool registry
+3. What Makes a Tool Agent Graph Unique
+Specialized tool configs (e.g., Gmail, Calendar, etc.).  --  No, all of these are tool agent graphs.
+Sub-tool registry: May have its own sub-graph/tool registry.  -- Already part of the program, or explain to me why it is not.
+No direct user conversation (unless acting as a stand-alone agent).  -- No, congured above
+These should be in agent-specific config fields or a subclass (e.g., PersonalAssistantConfig(GraphConfig)).
+4. Implementation Plan
+Step 1: Expand graph_config.py to include all generic config fields (with docstrings).  Great point for doc strings.
+Step 2: Move orchestrator-specific fields to a subclass or a separate config (if needed).
+Step 3: Update the orchestrator’s graph file to use the new config structure.
+Step 4: Do the same for personal_assistant and other agents. -- That is this whole excercise.  
+
+
+
+
+
+uuid will not handle . appended uuids in the database.  If a message has a request_id, it much move that to metadata as parent request_id, and if it is going to the parent as a response, it should close it's local request and request_id and replace it with the parent request id.
+
+
+
+Wrap on Monday 5/6/2025
+We are failing to call the dummy email tool
+We are failing to authorize anything with google
+We are not logging transactions through the personal assistant
+We just got the failed to encode error AGAIN
+
+We were adjusting the settings and it was ratholing so we tried to return to testing messages between graphs.  Somewhat successful but with kluge files
+We are not sending our messages to or from the UI, rather directly through the personal assistant graph
+We I do not believe we are sending the messages to the personal assistant graph llm connection
+
+
+
+
+
+
+
+Multi-Personality Config Migration Checklist
+[ ] Update YAML Structure
+Add a personality: section with:
+default_personality: valet
+personalities: dictionary, one entry per agent/personality.
+Example:
+Apply to user_config....
+[ ] Move Existing Personality Configs to YAML
+For each agent/personality, move their config from Python or other files into the YAML under personalities:.
+[ ] Update/Refactor Agent Loading Logic
+Ensure agent/personality selection uses get_personality_config(name, ...) from personality_config.py.
+When switching personalities (e.g., “Let me speak with the personal assistant”), pass the correct name to the loader.
+[ ] Session/State Management
+Ensure each personality/agent can have its own session state (e.g., conversation history, context).
+Store session state keyed by both personality_name and session_id if needed.
+[ ] Update Documentation
+Document the new YAML structure and how to add/edit personalities.
+Add usage examples for switching personalities and listing available personalities.
+[ ] Test Backward Compatibility
+Verify that a single-personality config (old style) still works.
+[ ] (Optional) Add CLI/Tooling
+Add a script or CLI command to list available personalities and show their config.
+File/Location Reference:
+YAML: config/developer_user_config.yaml
+Loader: src/config/personality_config.py
+Agent/session logic: wherever you manage agent state/switching
+
 

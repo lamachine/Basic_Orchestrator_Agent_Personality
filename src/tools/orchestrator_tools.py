@@ -68,10 +68,14 @@ def add_tools_to_prompt(prompt: str) -> str:
     
     tools_desc = "\n\n# AVAILABLE TOOLS\n\n"
     tools_desc += (
-        "IMPORTANT: For ANY user request related to tasks, calendar, email, or reminders, you MUST use the appropriate tool and output a tool call in JSON in backticks. Do NOT answer directly.\n"
+        "IMPORTANT: For any user request, ALWAYS call the appropriate tool. Pass the user's request as the 'task' argument in the tool call.\n"
+        "Do NOT reference or call sub-tools (like email, tasks, calendar) directly. The personal_assistant tool will handle all routing and interpretation.\n"
+        "For EVERY user request, you MUST output a tool call in the required backtick-JSON format below.\n"
+        "You MUST ensure the tool call is valid JSON (no trailing commas, correct syntax). Double-check your output for correct JSON syntax before submitting. If the tool call is not valid JSON, the request will fail.\n"
+        "If you do not use the tool call, the user will not receive real results.\n"
         "If you do not see a relevant tool, reply: 'No tool available for this request.'\n"
         "\nTo use a tool, output a JSON object in backticks with the following format:\n"
-        '`{"name": "tool_name", "args": {"task": "what to do", ...other args}}`\n\n'
+        '`{"name": "<tool_name>", "args": {"task": "user request here"}}`\n\n'
     )
     for tool_name, tool_info in TOOL_DEFINITIONS.items():
         tools_desc += f"## {tool_name}\n{tool_info['description']}\n\nExamples:\n"

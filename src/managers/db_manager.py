@@ -13,12 +13,13 @@ class DBService:
     
     def __init__(self):
         """Initialize the database service."""
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Using service role key for backend operations
-        if not url or not key:
-            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
+        url = os.getenv("SUPABASE_URL")  # Preferred: url
+        anon_key = os.getenv("SUPABASE_ANON_KEY")  # Preferred: anon_key
+        service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Preferred: service_role_key
+        if not (url and service_role_key):
+            raise ValueError("url and service_role_key must be set")
             
-        self.client: Client = create_client(url, key)
+        self.client: Client = create_client(url, service_role_key)
         self.message_manager = None  # Will be set in main.py
 
     async def insert(self, table_name: str, data: Dict[str, Any]) -> Dict[str, Any]:

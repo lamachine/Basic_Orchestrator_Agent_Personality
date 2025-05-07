@@ -1,0 +1,108 @@
+# User Configuration for Basic Orchestrator Agent Personality
+# 
+# This file contains user-editable settings for the application.
+# Edit the values below to customize the behavior of the system.
+# 
+# Note: Do not remove any sections, only modify values.
+#       Use # to add comments or disable settings.
+#
+# For more information, see the project documentation.
+#
+
+# --- Logging config is now handled in src/config/logging_config.py ---
+logging:
+  file_level: DEBUG
+  console_level: INFO
+  log_dir: ./logs
+  max_log_size_mb: 10
+  backup_count: 5
+
+# --- LLM config is now handled in src/config/llm_config.py ---
+llm:
+  preferred: ollama  # REQUIRED: one of [ollama, openai, anthropic, grok, huggingface, google]
+  providers:
+    ollama:
+      enabled: true
+      # Optionally override defaults (rare)
+      # api_url: http://localhost:11434
+      # default_model: llama3.1:latest
+    openai:
+      enabled: false
+      # api_key: sk-...
+      # default_model: gpt-4
+    anthropic:
+      enabled: false
+    grok:
+      enabled: false
+    huggingface:
+      enabled: false
+    google:
+      enabled: false
+
+# --- Orchestrator/agent config is now handled in src/config/orchestrator_config.py ---
+# orchestrator:
+#   graph_type: standard
+#   max_recursion_depth: 3
+#   max_pending_tasks: 10
+#   task_timeout_seconds: 300
+#   default_thinking_format: steps
+# agents:
+#   enabled:
+#   - librarian
+#   - valet
+#   - personal_assistant
+#   librarian:
+#     use_web_search: true
+#     max_references: 5
+#   valet:
+#     check_frequency_seconds: 300
+#   personal_assistant:
+#     default_timezone: UTC
+
+# --- Database config is now handled in src/config/database_config.py ---
+database:
+  provider: supabase_local  # or supabase_web, or postgres, or parent
+  providers:
+    supabase_local:
+      url: http://localhost:54321
+      anon_key: local-anon-key
+      service_role_key: local-service-role-key
+    supabase_web:
+      url: https://yourproject.supabase.co
+      anon_key: web-anon-key
+      service_role_key: web-service-role-key
+    postgres:
+      url: postgresql://user:password@localhost:5432/dbname
+
+# --- Personality config is now handled in src/config/personality_config.py ---
+personality:
+  personalities:
+    # List your personalities here. The first enabled will be default at startup.
+    # - name: my_character
+    #   enabled: true
+    #   file_path: path/to/your/character1.json
+    # - name: another_character
+    #   enabled: false
+    #   file_path: path/to/your/character2.json
+    - name: valet
+      enabled: true
+      file_path: src/agents/Character_Ronan_valet_orchestrator.json
+    - name: personal_assistant
+      enabled: true
+      file_path: src/agents/Character_Ronan_personal_assistant.json
+    - name: librarian
+      enabled: false
+      file_path: src/agents/Character_Ronan_librarian.json
+
+# --- General config is handled in src/config/user_config.py ---
+general:
+  user_id: developer
+  debug_mode: false
+  session_timeout_minutes: 30
+  location: San Jose, CA
+  timezone: America/Los_Angeles
+
+ui:
+  provider: cli
+  options:
+    enable_cli: true

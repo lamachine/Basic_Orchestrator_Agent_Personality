@@ -113,7 +113,7 @@ def db_manager(mock_supabase, mock_create_client, mock_llm_service):
     with patch.dict(os.environ, {
         "SUPABASE_URL": "https://test.supabase.co",
         "SUPABASE_SERVICE_ROLE_KEY": "test-key",
-        "OLLAMA_API_URL": "http://localhost:11434"
+        "api_url": "http://localhost:11434"
     }):
         return DatabaseManager()
 

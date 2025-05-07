@@ -12,15 +12,17 @@ import json
 @pytest.fixture(autouse=True)
 def setup_test_env():
     """Setup test environment variables"""
-    os.environ['SUPABASE_URL'] = 'http://localhost:54321'
-    os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-key'
-    os.environ['OLLAMA_API_URL'] = 'http://localhost:11434'
+    os.environ['url'] = 'http://localhost:54321'
+    os.environ['anon_key'] = 'nomic-embed-text'
+    os.environ['service_role_key'] = 'test-key'
+    os.environ['api_url'] = 'http://localhost:11434'
     os.environ['OLLAMA_EMBEDDING_MODEL'] = 'nomic-embed-text'
     yield
     # Cleanup
-    os.environ.pop('SUPABASE_URL', None)
-    os.environ.pop('SUPABASE_SERVICE_ROLE_KEY', None)
-    os.environ.pop('OLLAMA_API_URL', None)
+    os.environ.pop('url', None)
+    os.environ.pop('anon_key', None)
+    os.environ.pop('service_role_key', None)
+    os.environ.pop('api_url', None)
     os.environ.pop('OLLAMA_EMBEDDING_MODEL', None)
 
 # Shared test data
@@ -177,7 +179,8 @@ def sample_config():
     return {
         "app_name": "Test App",
         "debug": True,
-        "log_level": "DEBUG",
+        "file_level": "DEBUG",
+        "console_level": "DEBUG",
         "db": {
             "host": "localhost",
             "port": 5432,

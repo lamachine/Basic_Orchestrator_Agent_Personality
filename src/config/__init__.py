@@ -34,27 +34,27 @@ class Configuration:
 
     @property
     def ollama_api_url(self):
-        return self.llm.api_url
+        return self.llm['ollama'].api_url if self.llm and 'ollama' in self.llm else None
 
     @property
     def ollama_model(self):
-        return self.llm.default_model
+        return self.llm['ollama'].default_model if self.llm and 'ollama' in self.llm else None
 
     @property
     def llm_temperature(self):
-        return self.llm.temperature
+        return self.llm['ollama'].temperature if self.llm and 'ollama' in self.llm else None
 
     @property
     def llm_max_tokens(self):
-        return self.llm.max_tokens
+        return self.llm['ollama'].max_tokens if self.llm and 'ollama' in self.llm else None
 
     @property
     def llm_context_window(self):
-        return self.llm.context_window
+        return self.llm['ollama'].context_window if self.llm and 'ollama' in self.llm else None
 
     @property
     def llm_models(self):
-        return self.llm.models
+        return self.llm['ollama'].models if self.llm and 'ollama' in self.llm else None
 
     def get_agent_config(self, agent_name: str) -> Dict[str, Any]:
         """Get configuration for a specific agent."""
@@ -74,25 +74,21 @@ class Configuration:
         Returns:
             Dictionary with model configuration or default settings
         """
-        if purpose in self.llm_models:
-            # Get the settings for this purpose
-            model_config = self.llm_models.get(purpose, {})
-            
-            # If it's a simple string (backward compatibility), convert to dict
+        if purpose in self.llm['ollama'].models:
+            model_config = self.llm['ollama'].models.get(purpose, {})
             if isinstance(model_config, str):
                 return {
                     'model': model_config,
-                    'temperature': self.llm_temperature,
-                    'max_tokens': self.llm_max_tokens
+                    'temperature': self.llm['ollama'].temperature,
+                    'max_tokens': self.llm['ollama'].max_tokens
                 }
-            
             return model_config
         
         # Return default configuration
         return {
-            'model': self.ollama_model,
-            'temperature': self.llm_temperature,
-            'max_tokens': self.llm_max_tokens
+            'model': self.llm['ollama'].default_model,
+            'temperature': self.llm['ollama'].temperature,
+            'max_tokens': self.llm['ollama'].max_tokens
         }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -103,7 +99,7 @@ class Configuration:
         """String representation of configuration."""
         # Hide sensitive values
         safe_dict = self.to_dict()
-        for key in ['supabase_anon_key', 'supabase_key', 'supabase_service_role_key']:
+        for key in ['anon_key', 'service_role_key']:
             if key in safe_dict and safe_dict[key]:
                 safe_dict[key] = '***REDACTED***'
         return f"Configuration({safe_dict})"

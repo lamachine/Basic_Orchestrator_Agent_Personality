@@ -20,7 +20,7 @@ import json
 import os
 import httpx
 from typing import Dict, Any, List, Optional
-from src.config.llm_config import EMBEDDING_MODEL, LLM_MODEL, LLM_PROVIDER, OLLAMA_HOST
+from src.config.llm_config import get_default_model
 import ollama
 import uuid
 import traceback
@@ -32,6 +32,13 @@ from src.tools.orchestrator_tools import format_completed_tools_prompt
 from src.state.state_models import MessageRole, TaskStatus, MessageState
 
 logger = get_logger(__name__)
+
+# Helper to get provider and host from config or env
+def get_llm_provider():
+    return os.getenv("LLM_PROVIDER", "ollama")
+
+def get_ollama_host():
+    return os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
 class LLMService:
     """Service for LLM operations."""
@@ -273,7 +280,9 @@ class LLMService:
         request_id = str(uuid.uuid4())
         logger.debug(f"[EMBED] [{request_id}] Embedding request for text: '{text[:50]}'... (len={len(text)}) model={model}")
         try:
-            embedding_model = model or os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+            # Use provider for all get_default_model calls
+            provider = get_llm_provider()
+            embedding_model = model or get_default_model(provider, "embedding")
             logger.debug(f"[EMBED] [{request_id}] Generating embedding using model: {embedding_model}")
             try:
                 if not self.api_url.rstrip('/').endswith('/api'):
@@ -368,13 +377,14 @@ class LLMService:
             logger.error(f"Error formatting messages: {e}")
             raise
 
-if LLM_PROVIDER == 'ollama':
-    ollama.host = OLLAMA_HOST
+if get_llm_provider() == 'ollama':
+    ollama.host = get_ollama_host()
     async def get_ollama_response(messages: list, tools: list = None) -> dict:
         """Get response from Ollama."""
         try:
+            provider = get_llm_provider()
             return ollama.chat(
-                model=LLM_MODEL,
+                model=get_default_model(provider, "chat"),
                 messages=messages,
                 tools=tools,
                 options={

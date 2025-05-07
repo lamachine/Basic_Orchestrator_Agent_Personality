@@ -85,6 +85,7 @@ The system supports multiple interface types through the abstract `UserInterface
 3. Configure the system:
    - Copy `.env.example` to `.env`
    - Update settings in `.env` for your environment
+   - Edit `config/config.yaml` to customize the orchestrator and agents
 
 ## Running the System
 

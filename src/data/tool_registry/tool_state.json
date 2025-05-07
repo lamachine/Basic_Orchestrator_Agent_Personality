@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-05-05T15:33:53.723644",
+  "last_updated": "2025-05-07T00:40:52.764973",
   "configs": {
     "personal_assistant": {
       "name": "personal_assistant",
@@ -39,10 +39,13 @@
         "author": "Basic Orchestrator",
         "created": "2024-05-15",
         "usage_examples": [
-          "Send an email to John about the meeting tomorrow",
-          "Add a reminder to buy groceries at 6pm",
-          "Check my calendar for next week",
-          "Create a new task to finish the report"
+          "{\"task\": \"check my task list\"}",
+          "{\"task\": \"add new task: Finish report for Smith project\"}",
+          "{\"task\": \"check my email inbox\"}",
+          "{\"task\": \"send an email to John about the meeting tomorrow\"}",
+          "{\"task\": \"add a reminder to buy groceries at 6pm\"}",
+          "{\"task\": \"check my calendar for next week\"}",
+          "{\"task\": \"create a new task to finish the report\"}"
         ]
       }
     }

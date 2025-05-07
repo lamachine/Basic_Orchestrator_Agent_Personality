@@ -26,17 +26,15 @@ class OrchestratorAgent(BaseAgent):
     Now supports optional personality integration.
     """
     
-    def __init__(self, config: Configuration, personality_file: Optional[str] = None):
-        """Initialize the orchestrator agent.
-        
-        Args:
-            config: System configuration
-            personality_file: Optional path to a personality JSON file
-        """
+    def __init__(self, config: Configuration = None, personality_file: Optional[str] = None):
+        """Initialize the Orchestrator Agent."""
+        if not config:
+            config = Configuration()
         super().__init__(
             name="orchestrator",
-            api_url=config.llm.api_url,
-            model=config.llm.default_model,
+            prompt_section="You are the orchestrator agent.",
+            api_url=config.llm['ollama'].api_url,
+            model=config.llm['ollama'].default_model,
             config=config
         )
         self.conversation_history: List[Dict[str, Any]] = []
@@ -92,11 +90,16 @@ class OrchestratorAgent(BaseAgent):
             # Only handle the first tool call for now (single tool per message)
             match = matches[0]
             tool_call_json = match.group(0).strip('`')
-            tool_call = json.loads(tool_call_json)
+            try:
+                tool_call = json.loads(tool_call_json)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid tool call JSON: {tool_call_json} | Error: {e}")
+                return {"response": f"Error: Tool call was not valid JSON. Please try again or rephrase your request."}
             tool_name = tool_call.get("name")
             args = tool_call.get("args", {})
             # Generate a request_id
             request_id = str(uuid.uuid4())
+            args["request_id"] = request_id
             # Log the tool call
             if session_state and "conversation_state" in session_state:
                 await log_and_persist_message(

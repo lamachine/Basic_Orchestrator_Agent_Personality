@@ -24,7 +24,13 @@ def set_llm_agent(agent):
     global llm_agent, llm_service
     llm_agent = agent
     if llm_service is None:
-        ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+        # Prefer config if available, fallback to env var
+        try:
+            from src.config import Configuration
+            config = Configuration()
+            ollama_url = config.llm['ollama'].api_url
+        except Exception:
+            ollama_url = os.getenv("api_url", "http://localhost:11434")
         embedding_model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
         llm_service = LLMService(ollama_url, embedding_model)
     logger.debug("LLM agent and service set for GitHub adapter")
@@ -33,7 +39,12 @@ def get_embedding(text: str) -> List[float]:
     """Get embedding vector for text using LLMService."""
     global llm_service
     if llm_service is None:
-        ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+        try:
+            from src.config import Configuration
+            config = Configuration()
+            ollama_url = config.llm['ollama'].api_url
+        except Exception:
+            ollama_url = os.getenv("api_url", "http://localhost:11434")
         embedding_model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
         llm_service = LLMService(ollama_url, embedding_model)
     try:

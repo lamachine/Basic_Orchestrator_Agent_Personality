@@ -71,16 +71,16 @@ class PersonalAssistantConfig:
     google: GoogleConfig = GoogleConfig()
     
     # Database configuration (inherited from main orchestrator)
-    database_url: str = os.getenv('DATABASE_URL', '')
+    url: str = os.getenv('DATABASE_URL', '')
     
     # LLM configuration (inherited from main orchestrator)
     llm_api_url: str = os.getenv('LLM_API_URL', 'http://localhost:11434')
     llm_model: str = os.getenv('LLM_MODEL', 'llama3.1')
     
     # Logging configuration
-    log_level: str = os.getenv('PA_LOG_LEVEL', 'DEBUG')
-    log_file: str = os.getenv('PA_LOG_FILE', 'personal_assistant.log')
-    console_log_level: str = os.getenv('PA_CONSOLE_LOG_LEVEL', 'DEBUG')
+    file_level: str = os.getenv('PA_FILE_LEVEL', 'DEBUG')
+    console_level: str = os.getenv('PA_CONSOLE_LEVEL', 'DEBUG')
+    log_dir: str = os.getenv('PA_LOG_DIR', 'logs')
 
     # Gmail configuration
     gmail_enabled: bool = False  # Will be set in __post_init__
@@ -106,9 +106,9 @@ class PersonalAssistantConfig:
         """Configure logging for personal assistant."""
         from src.config.logging_config import setup_logging
         setup_logging({
-            'file_level': self.log_level,
-            'console_level': self.console_log_level,
-            'log_dir': 'logs',
+            'file_level': self.file_level,
+            'console_level': self.console_level,
+            'log_dir': self.log_dir,
             'max_log_size_mb': 10,
             'backup_count': 5
         })
@@ -126,7 +126,7 @@ class PersonalAssistantConfig:
                 return False
             
         # Validate core services
-        if not (self.database_url and self.llm_api_url and self.llm_model):
+        if not (self.url and self.llm_api_url and self.llm_model):
             return False
             
         return True
@@ -150,9 +150,10 @@ class PersonalAssistantConfig:
                 'user_id': self.gmail_config.user_id if self.gmail_config else None,
                 'scopes': self.gmail_config.scopes if self.gmail_config else None
             },
-            'database_url': self.database_url,
+            'url': self.url,
             'llm_api_url': self.llm_api_url,
             'llm_model': self.llm_model,
-            'log_level': self.log_level,
-            'log_file': self.log_file
+            'file_level': self.file_level,
+            'console_level': self.console_level,
+            'log_dir': self.log_dir
         } 

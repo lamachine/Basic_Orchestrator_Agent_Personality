@@ -50,14 +50,14 @@ def main():
     try:
         # Get Supabase credentials
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         
-        if not url or not key:
-            logger.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
+        if not (url and service_role_key):
+            logger.error("url and service_role_key must be set")
             return 1
             
         # Initialize Supabase client
-        client = create_client(url, key)
+        client = create_client(url, service_role_key)
         
         # Get migrations directory
         migrations_dir = Path(__file__).parent / "migrations"

@@ -67,8 +67,8 @@ class LLMQueryAgent(BaseAgent):
         super().__init__(
             name="llm_query",
             prompt_section="You are a helpful AI assistant that can use tools to assist the user.",
-            api_url=config.ollama_api_url,
-            model=config.ollama_model,
+            api_url=config.llm['ollama'].api_url,
+            model=config.llm['ollama'].default_model,
             config=config
         )
         

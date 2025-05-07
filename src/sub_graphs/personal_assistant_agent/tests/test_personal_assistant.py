@@ -16,8 +16,8 @@ from src.tools.initialize_tools import get_registry
 
 # Setup logging with our configuration system
 config = {
-    'file_log_level': logging.DEBUG,
-    'console_log_level': logging.DEBUG,
+    'file_level': logging.DEBUG,
+    'console_level': logging.DEBUG,
     'log_dir': os.path.join(os.getcwd(), 'logs'),
     'max_log_size_mb': 10,
     'backup_count': 5
@@ -59,14 +59,14 @@ class TestConfig:
         os.environ['GOOGLE_CREDENTIALS_FILE'] = 'C:\\Users\\Owner\\secure_credentials\\google_client_secret.json'
 
         # Core services
-        os.environ['OLLAMA_API_URL'] = 'http://localhost:11434'
-        os.environ['OLLAMA_MODEL'] = 'llama3.1'
+        os.environ['api_url'] = 'http://localhost:11434'
+        os.environ['default_model'] = 'llama3.1'
         os.environ['OLLAMA_EMBEDDING_MODEL'] = 'nomic-embed-text'
 
         # Supabase
-        os.environ['SUPABASE_URL'] = 'http://localhost:8000'
-        os.environ['SUPABASE_ANON_KEY'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
-        os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
+        os.environ['url'] = 'http://localhost:8000'
+        os.environ['anon_key'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+        os.environ['service_role_key'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
 
         # Character
         os.environ['CHARACTER_FILE'] = 'src\\agents\\Character_Ronan_valet_orchestrator.json'

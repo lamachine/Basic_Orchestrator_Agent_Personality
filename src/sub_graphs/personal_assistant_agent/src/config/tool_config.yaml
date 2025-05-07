@@ -39,7 +39,10 @@ metadata:
   author: "Basic Orchestrator"
   created: "2024-05-15"
   usage_examples:
-    - "Send an email to John about the meeting tomorrow"
-    - "Add a reminder to buy groceries at 6pm"
-    - "Check my calendar for next week"
-    - "Create a new task to finish the report" 
+    - '{"task": "check my task list"}'
+    - '{"task": "add new task: Finish report for Smith project"}'
+    - '{"task": "check my email inbox"}'
+    - '{"task": "send an email to John about the meeting tomorrow"}'
+    - '{"task": "add a reminder to buy groceries at 6pm"}'
+    - '{"task": "check my calendar for next week"}'
+    - '{"task": "create a new task to finish the report"}' 
