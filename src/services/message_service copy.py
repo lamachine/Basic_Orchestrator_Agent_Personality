@@ -11,10 +11,9 @@ from src.services.logging_service import get_logger
 from src.managers.db_manager import DBService
 from src.utils.datetime_utils import format_datetime, parse_datetime, now, timestamp
 from src.services.llm_service import LLMService
-from src.state.state_models import MessageRole
 
 logger = get_logger(__name__)
-
+    
 class DatabaseMessageService:
     """
     Service for managing messages in the database.
@@ -76,14 +75,6 @@ class DatabaseMessageService:
             except Exception as e:
                 logger.error(f"Error generating embedding, using default: {e}")
                 embedding = [0.0] * 768  # Fallback to default if embedding generation fails
-            
-            # Add user_id and character_name to metadata
-            metadata = metadata.copy() if metadata else {}
-            metadata['user_id'] = user_id
-            if role == 'assistant':
-                metadata['character_name'] = target
-            elif role == 'user':
-                metadata['user_id'] = user_id
             
             record = {
                 "session_id": session_id,
@@ -210,8 +201,10 @@ class DatabaseMessageService:
         """Clear a pending message by request ID."""
         self._pending_messages.pop(request_id, None)
 
-# DRY message logging utility - lazily import MessageState to avoid circular imports
-from src.state.state_models import MessageState
+# DRY message logging utility
+from src.state.state_models import MessageRole, MessageState
+import logging
+logger = get_logger(__name__)
 
 async def log_and_persist_message(
     session_state: MessageState,
@@ -222,46 +215,20 @@ async def log_and_persist_message(
     target: Optional[str] = None
 ) -> None:
     """
-    Log and persist a message using the session state.
-    
+    Log, persist, and embed a message in a DRY way.
     Args:
-        session_state: MessageState instance
-        role: Message role
-        content: Message content
+        session_state: The MessageState object
+        role: The role of the message sender
+        content: The message content
         metadata: Optional metadata
-        sender: Optional sender identifier
-        target: Optional target identifier
+        sender: Required sender string
+        target: Required target string
     """
-    logger.debug(f"[log_and_persist_message] Starting with:")
-    logger.debug(f"[log_and_persist_message] session_state type: {type(session_state)}")
-    logger.debug(f"[log_and_persist_message] role: {role}")
-    logger.debug(f"[log_and_persist_message] content length: {len(content)}")
-    logger.debug(f"[log_and_persist_message] metadata: {metadata}")
-    logger.debug(f"[log_and_persist_message] sender: {sender}")
-    logger.debug(f"[log_and_persist_message] target: {target}")
-    
+    logger.debug(f"[log_and_persist_message] role={role}, sender={sender}, target={target}, content={content}")
+    if not session_state:
+        logger.warning("[log_and_persist_message] No session_state provided, skipping persistence.")
+        return
     try:
-        if not isinstance(session_state, MessageState):
-            logger.error(f"[log_and_persist_message] Invalid session_state type: {type(session_state)}")
-            raise TypeError(f"session_state must be MessageState, got {type(session_state)}")
-            
-        if not sender or not target:
-            logger.error(f"[log_and_persist_message] Missing sender or target: sender={sender}, target={target}")
-            raise ValueError("Both sender and target must be provided")
-            
-        # Add user_id and character_name to metadata
-        metadata = metadata.copy() if metadata else {}
-        if role == MessageRole.USER:
-            metadata['user_id'] = 'user'  # Default user ID
-            logger.debug(f"[log_and_persist_message] Added user_id to metadata: {metadata}")
-        elif role == MessageRole.ASSISTANT:
-            metadata['character_name'] = 'Assistant'  # Default character name
-            logger.debug(f"[log_and_persist_message] Added default character_name: Assistant")
-            
-        logger.debug(f"[log_and_persist_message] Final metadata: {metadata}")
-        logger.debug(f"[log_and_persist_message] Calling add_message on MessageState")
-        
-        # Use the add_message method directly on the MessageState object
         await session_state.add_message(
             role=role,
             content=content,
@@ -269,11 +236,6 @@ async def log_and_persist_message(
             sender=sender,
             target=target
         )
-        logger.debug("[log_and_persist_message] Successfully added message")
-        
+        logger.debug(f"[log_and_persist_message] Message persisted and embedding generated.")
     except Exception as e:
-        logger.error(f"[log_and_persist_message] Error: {str(e)}", exc_info=True)
-        raise
-
-# Export only what's needed
-__all__ = ['DatabaseMessageService', 'log_and_persist_message']
+        logger.error(f"[log_and_persist_message] Failed to persist message: {e}")

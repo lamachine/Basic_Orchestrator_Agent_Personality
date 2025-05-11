@@ -29,14 +29,7 @@ from typing import Dict, Any, List, Optional
 from src.state.state_models import MessageRole
 from src.config import Configuration
 from src.agents.base_agent import BaseAgent
-from src.tools.orchestrator_tools import (
-    add_tools_to_prompt, 
-    handle_tool_calls, 
-    format_tool_results, 
-    PENDING_TOOL_REQUESTS,
-    format_completed_tools_prompt
-)
-from src.tools.initialize_tools import initialize_tool_dependencies
+from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS, format_completed_tools_prompt
 from src.services.logging_service import get_logger
 from src.tools.tool_processor import ToolProcessor
 from datetime import datetime
@@ -66,7 +59,6 @@ class LLMQueryAgent(BaseAgent):
             
         super().__init__(
             name="llm_query",
-            prompt_section="You are a helpful AI assistant that can use tools to assist the user.",
             api_url=config.llm['ollama'].api_url,
             model=config.llm['ollama'].default_model,
             config=config
@@ -77,7 +69,7 @@ class LLMQueryAgent(BaseAgent):
 
     def generate_prompt(self, user_input: str) -> str:
         """Generate a prompt for the LLM."""
-        return f"{self.prompt_section}\n\nUser: {user_input}\n\nAssistant:"
+        return f"User: {user_input}\n\nAssistant:"
 
     async def chat(self, user_input: str) -> Dict[str, Any]:
         """Process a user input message and return a response."""
@@ -363,80 +355,6 @@ class LLMQueryAgent(BaseAgent):
             logger.error(f"Error applying personality to tool results: {e}")
             # Return original results if formatting fails
             return execution_results
-
-    async def handle_tool_completion(self, request_id: str, original_query: str) -> Dict[str, str]:
-        """
-        Handle the completion of a tool request.
-        
-        Args:
-            request_id: The ID of the completed tool request
-            original_query: The original user query that triggered the tool
-            
-        Returns:
-            Dict with response and status
-        """
-        try:
-            # Get the tool completion data
-            if request_id not in PENDING_TOOL_REQUESTS:
-                return {"response": "Tool request not found", "status": "error"}
-            
-            request_data = PENDING_TOOL_REQUESTS[request_id]
-            tool_name = request_data.get("name", "unknown_tool")
-            
-            # Generate prompt for tool completion
-            prompt = format_completed_tools_prompt(request_id, original_query)
-            
-            # Get response from LLM
-            response = await self.query_llm(prompt)
-            
-            # Store the assistant's response in the conversation state - wrapped in try/except
-            # to ensure we don't fail the entire request if storage fails
-            try:
-                if self.has_db and self.conversation_id:
-                    # Use message_manager directly
-                    if self.graph_state and "conversation_state" in self.graph_state:
-                        # Log the tool completion
-                        await self.graph_state["conversation_state"].add_message(
-                            role=MessageRole.TOOL,
-                            content=f"Tool completion from {tool_name}: {request_data.get('response', {})}",
-                            metadata={
-                                "timestamp": datetime.now().isoformat(),
-                                "tool_name": tool_name,
-                                "response_type": "tool_completion",
-                                "session_id": self.session_id,
-                                "request_id": request_id,
-                                "original_query": original_query
-                            },
-                            sender=f"orchestrator_graph.{tool_name}",
-                            target="orchestrator_graph.orchestrator"
-                        )
-                        # Log the assistant's response
-                        await self.graph_state["conversation_state"].add_message(
-                            role=MessageRole.ASSISTANT,
-                            content=response,
-                            metadata={
-                                "timestamp": datetime.now().isoformat(),
-                                "model": self.model,
-                                "response_type": "tool_completion_response",
-                                "session_id": self.session_id,
-                                "request_id": request_id,
-                                "tool_name": tool_name
-                            },
-                            sender="orchestrator_graph.orchestrator",
-                            target="orchestrator_graph.cli"
-                        )
-            except Exception as e:
-                logger.warning(f"Could not store assistant message after tool completion: {e}")
-                # Continue with processing even if message storage fails
-            
-            # Return success
-            logger.debug(f"Successfully processed tool completion for request {request_id}")
-            return {"response": response, "status": "success"}
-            
-        except Exception as e:
-            error_msg = f"Error handling tool completion: {e}"
-            logger.error(error_msg)
-            return {"response": f"Error: {error_msg}", "status": "error"}
 
     def _is_conversation_end(self, text: str) -> bool:
         """

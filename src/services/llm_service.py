@@ -161,12 +161,15 @@ class LLMService:
                 "context_window": context_window
             }
             
-            # Detailed request logging
+            # Enhanced request logging
             logger.debug("=== LLM Request Details ===")
             logger.debug(f"Full URL: {endpoint}")
             logger.debug(f"API Base URL: {self.api_url}")
             logger.debug(f"Model: {target_model}")
-            logger.debug(f"Request payload: {json.dumps(payload, indent=2)}")
+            logger.debug("=== Input Prompt ===")
+            logger.debug(prompt)
+            logger.debug("=== Request Payload ===")
+            logger.debug(json.dumps(payload, indent=2))
             
             # Make the request
             try:
@@ -184,7 +187,8 @@ class LLMService:
                 # Try to get response content regardless of status
                 try:
                     response_content = response.text
-                    logger.debug(f"Raw response content: {response_content}")
+                    logger.debug("=== Raw Response Content ===")
+                    logger.debug(response_content)
                 except Exception as content_error:
                     logger.error(f"Could not read response content: {content_error}")
                 
@@ -193,7 +197,12 @@ class LLMService:
                 
                 # Parse response
                 response_json = response.json()
-                logger.debug(f"Parsed response: {json.dumps(response_json, indent=2)}")
+                # Create a clean copy without the context array for logging
+                log_response = response_json.copy()
+                if 'context' in log_response:
+                    log_response['context'] = f"[{len(log_response['context'])} vector values]"
+                logger.debug("=== Parsed Response ===")
+                logger.debug(json.dumps(log_response, indent=2))
                 
                 return response_json["response"]
                 
@@ -204,11 +213,6 @@ class LLMService:
             except httpx.HTTPError as http_error:
                 logger.error(f"HTTP Error occurred: {http_error}")
                 logger.error(f"Request URL was: {endpoint}")
-                # logger.error("This might indicate Ollama is not running or the endpoint is incorrect")
-                # logger.debug("For Ollama, ensure:")
-                # logger.debug("1. Ollama is running (try 'ollama list' in terminal)")
-                # logger.debug("2. The model is pulled (try 'ollama pull llama3.1')")
-                # logger.debug("3. The correct API endpoint is used (should be http://localhost:11434/api)")
                 raise
                 
         except Exception as e:
@@ -363,14 +367,25 @@ class LLMService:
             str: Formatted prompt string
         """
         try:
-            prompt = f"{system_prompt}\n\n" if system_prompt else ""
+            prompt = f"llm_service.format_messages: {system_prompt}\n\n" if system_prompt else ""
             
             for message in messages:
                 role = message.get("role", "user")
                 content = message.get("content", "")
-                prompt += f"{role.capitalize()}: {content}\n\n"
+                sender = message.get("sender", "")
                 
-            prompt += "Assistant:"
+                if role == "user":
+                    prompt += f"<{sender}>: {content}\n\n"
+                elif role == "assistant":
+                    # Use character name if available, otherwise use "Assistant"
+                    character_name = message.get("character_name", "Assistant")
+                    prompt += f"{character_name}: {content}\n\n"
+                else:
+                    prompt += f"{role.capitalize()}: {content}\n\n"
+                
+            # Add final assistant prompt
+            character_name = messages[-1].get("character_name", "Assistant") if messages else "Assistant"
+            prompt += f"{character_name}:"
             return prompt
             
         except Exception as e:

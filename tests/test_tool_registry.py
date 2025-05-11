@@ -12,8 +12,12 @@ import tempfile
 import yaml
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
+import importlib
+import logging
 
 from src.tools.registry.tool_registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 # Test fixtures
 @pytest.fixture
@@ -54,48 +58,118 @@ def mock_sub_graphs_dir():
     shutil.rmtree(temp_dir)
 
 @pytest.fixture
-def registry_with_mock_dir(mock_sub_graphs_dir):
-    """Create a ToolRegistry that uses the mock directory."""
-    with patch('src.tools.registry.tool_registry.Path') as mock_path:
-        # Mock the data directory to be in our temp dir
-        data_dir = Path(mock_sub_graphs_dir) / "data" / "tool_registry"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Make real Path calls to our mock directory structure
-        def path_side_effect(path_str):
-            if path_str == "src/data/tool_registry":
-                return data_dir
-            elif path_str == "src/sub_graphs":
-                return Path(mock_sub_graphs_dir) / "src" / "sub_graphs"
-            else:
-                # For other paths, use the real Path
-                return Path(path_str)
-        
-        mock_path.side_effect = path_side_effect
-        
-        registry = ToolRegistry()
-        yield registry
+def registry_with_mock_dir(tmp_path):
+    """Create a registry with a temporary directory."""
+    registry = ToolRegistry(data_dir=str(tmp_path))
+    return registry
 
+@pytest.fixture
+def mock_tool_module(tmp_path):
+    """Create a mock tool module for testing."""
+    # Create a mock tool directory
+    tool_dir = tmp_path / "test_agent"
+    tool_dir.mkdir()
+    
+    # Create a mock tool file
+    tool_file = tool_dir / "test_tool.py"
+    tool_file.write_text("""
+def test_tool():
+    \"\"\"Test tool description\"\"\"
+    return "test result"
+test_tool.description = "Test tool"
+test_tool.version = "1.0.0"
+test_tool.capabilities = ["test"]
+test_tool.example = "test_tool()"
+""")
+    
+    return tool_dir
 
 # Tests that should pass - expected use cases
 @pytest.mark.asyncio
-async def test_discover_tools_finds_valid_agent(registry_with_mock_dir):
-    """Test that the registry discovers a valid tool agent."""
-    # Act - discover tools
-    discovered_tools = await registry_with_mock_dir.discover_tools()
+async def test_discover_tools(registry_with_mock_dir, mock_tool_module):
+    """Test tool discovery."""
+    # Arrange
+    registry = registry_with_mock_dir
     
-    # Assert - should find our valid test_agent
-    assert "test_tool" in registry_with_mock_dir.tool_configs
-    assert "test_tool" in discovered_tools
+    # Act
+    await registry.discover_tools()
     
-    # Check config was loaded properly
-    config = registry_with_mock_dir.get_config("test_tool")
-    assert config is not None
-    assert config["name"] == "test_tool"
-    assert config["description"] == "A test tool for validation"
-    assert "capabilities" in config
-    assert "testing" in config["capabilities"]
+    # Assert
+    assert "test_tool" in registry.tools
+    assert "test_tool" in registry.tool_configs
+    assert registry.tool_configs["test_tool"]["description"] == "Test tool"
+    assert registry.tool_configs["test_tool"]["version"] == "1.0.0"
+    assert registry.tool_configs["test_tool"]["capabilities"] == ["test"]
+    assert registry.tool_configs["test_tool"]["example"] == "test_tool()"
 
+@pytest.mark.asyncio
+async def test_get_tool(registry_with_mock_dir, mock_tool_module):
+    """Test getting a tool."""
+    # Arrange
+    registry = registry_with_mock_dir
+    await registry.discover_tools()
+    
+    # Act
+    tool = registry.get_tool("test_tool")
+    
+    # Assert
+    assert tool is not None
+    assert tool.description == "Test tool"
+    assert tool.version == "1.0.0"
+    assert tool.capabilities == ["test"]
+    assert tool.example == "test_tool()"
+
+@pytest.mark.asyncio
+async def test_get_config(registry_with_mock_dir, mock_tool_module):
+    """Test getting a tool's config."""
+    # Arrange
+    registry = registry_with_mock_dir
+    await registry.discover_tools()
+    
+    # Act
+    config = registry.get_config("test_tool")
+    
+    # Assert
+    assert config is not None
+    assert config["description"] == "Test tool"
+    assert config["version"] == "1.0.0"
+    assert config["capabilities"] == ["test"]
+    assert config["example"] == "test_tool()"
+
+@pytest.mark.asyncio
+async def test_list_tools(registry_with_mock_dir, mock_tool_module):
+    """Test listing tools."""
+    # Arrange
+    registry = registry_with_mock_dir
+    await registry.discover_tools()
+    
+    # Act
+    tools = registry.list_tools()
+    
+    # Assert
+    assert "test_tool" in tools
+    assert len(tools) == 1
+
+@pytest.mark.asyncio
+async def test_persist_state(registry_with_mock_dir, mock_tool_module):
+    """Test state persistence."""
+    # Arrange
+    registry = registry_with_mock_dir
+    await registry.discover_tools()
+    
+    # Act
+    registry._persist_state()
+    
+    # Create new registry and load state
+    new_registry = ToolRegistry(data_dir=str(registry_with_mock_dir.data_dir))
+    new_registry._load_persisted_state()
+    
+    # Assert
+    assert "test_tool" in new_registry.tool_configs
+    assert new_registry.tool_configs["test_tool"]["description"] == "Test tool"
+    assert new_registry.tool_configs["test_tool"]["version"] == "1.0.0"
+    assert new_registry.tool_configs["test_tool"]["capabilities"] == ["test"]
+    assert new_registry.tool_configs["test_tool"]["example"] == "test_tool()"
 
 # Tests that should fail
 @pytest.mark.asyncio
@@ -126,45 +200,6 @@ async def test_discover_tools_empty_directory(registry_with_mock_dir):
     # Assert - should return empty list, not error
     assert discovered_tools == []
     assert len(registry_with_mock_dir.tool_configs) == 0
-
-
-@pytest.mark.asyncio
-async def test_approve_and_revoke_tool(registry_with_mock_dir):
-    """Test approving and revoking a tool."""
-    # Arrange - discover tools first
-    await registry_with_mock_dir.discover_tools()
-    
-    # Act - approve the test tool
-    approved = registry_with_mock_dir.approve_tool("test_tool")
-    
-    # Assert - should be approved
-    assert approved is True
-    assert "test_tool" in registry_with_mock_dir.approved_tools
-    
-    # Act - revoke the tool
-    revoked = registry_with_mock_dir.revoke_tool("test_tool")
-    
-    # Assert - should be revoked
-    assert revoked is True
-    assert "test_tool" not in registry_with_mock_dir.approved_tools
-
-
-@pytest.mark.asyncio
-async def test_get_tool_only_returns_approved(registry_with_mock_dir):
-    """Test that get_tool only returns approved tools."""
-    # Arrange - discover tools and load a mock implementation
-    await registry_with_mock_dir.discover_tools()
-    mock_tool_class = MagicMock()
-    registry_with_mock_dir.tools["test_tool"] = mock_tool_class
-    
-    # Act & Assert - Should return None for unapproved tool
-    assert registry_with_mock_dir.get_tool("test_tool") is None
-    
-    # Act - approve the tool
-    registry_with_mock_dir.approve_tool("test_tool")
-    
-    # Assert - Now should return the tool class
-    assert registry_with_mock_dir.get_tool("test_tool") is mock_tool_class
 
 
 if __name__ == "__main__":

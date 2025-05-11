@@ -21,10 +21,10 @@ from src.ui.cli import CLIInterface
 from src.managers.session_manager import SessionManager
 from src.services.session_service import SessionService
 from src.managers.db_manager import DBService
-from src.services.message_service import DatabaseMessageService, log_and_persist_message
+from src.services.message_service import DatabaseMessageService
 from src.services.logging_service import get_logger
 from src.state.state_models import MessageState
-from src.tools.initialize_tools import initialize_tools, get_registry
+from src.tools.initialize_tools import discover_and_initialize_tools, get_registry, initialize_tools
 
 logger = get_logger(__name__)
 
@@ -49,35 +49,22 @@ def find_personality_file(config: Configuration, personality_file: Optional[str]
         if personality_file:
             file_path = Path(personality_file)
             if not file_path.exists():
-                logger.error(f"Personality file not found: {file_path} (absolute: {file_path.absolute()})")
+                logger.error(f"Personality file not found: {file_path}")
                 return None
-            logger.debug(f"Using explicitly provided personality file: {file_path} (exists: {file_path.exists()})")
             return str(file_path)
             
         # Use default from config
         if config.personality_file_path:
             file_path = Path(config.personality_file_path)
-            # Check if file exists as specified
-            if file_path.exists():
-                logger.debug(f"Using default personality file from config: {file_path}")
-                return str(file_path)
+            if not file_path.exists():
+                logger.error(f"Default personality file not found: {file_path}")
+                return None
+            return str(file_path)
             
-            # Try with src/ prefix if not found directly
-            if not file_path.is_absolute() and not str(file_path).startswith('src/'):
-                alt_path = Path("src") / file_path
-                if alt_path.exists():
-                    logger.debug(f"Found personality file with src/ prefix: {alt_path}")
-                    return str(alt_path)
-                
-            logger.error(f"Default personality file not found: {file_path} (absolute: {file_path.absolute()})")
-            logger.error(f"Current working directory: {Path.cwd()}")
-            return None
-            
-        logger.warning("No personality file specified in config")
         return None
         
     except Exception as e:
-        logger.error(f"Error finding personality file: {e}", exc_info=True)
+        logger.error(f"Error finding personality file: {e}")
         return None
 
 def initialize_agents(config: Configuration, personality_file: Optional[str] = None) -> Tuple[OrchestratorAgent, LLMQueryAgent]:
@@ -129,21 +116,13 @@ async def run_with_interface(interface_type: str = "cli", session_id: Optional[s
         logger.debug(f"Logging initialized at {console_level} level (console)")
         
         # --- TOOL DISCOVERY AND INITIALIZATION ---
-        # Initialize tools (this handles discovery and registration internally)
-        await initialize_tools()
-        
-        # Get final state of registered tools
+        discovered = await discover_and_initialize_tools(auto_approve=True)
+        logger.debug(f"Newly approved tools this run: {discovered}")
         registry = get_registry()
-        available_tools = registry.list_tools()
-        
-        # Also initialize tool definitions for prompt generation
-        from src.tools.orchestrator_tools import initialize_tool_definitions
-        await initialize_tool_definitions()
-        
-        if available_tools:
-            logger.debug(f"Available tools: {', '.join(available_tools)}")
-        else:
-            logger.debug("No tools were initialized")
+        approved_and_loaded = registry.list_tools()
+        logger.debug(f"All approved and loaded tools: {approved_and_loaded}")
+        # Optionally, build/install tool nodes (if needed for your workflow)
+        await initialize_tools()
         
         # Initialize core components
         personality_path = find_personality_file(config, personality_file)
@@ -152,8 +131,8 @@ async def run_with_interface(interface_type: str = "cli", session_id: Optional[s
         # Initialize database and session services
         db_service = DBService()
         # Initialize message service and assign to db_service.message_manager
-        db_message_service = DatabaseMessageService(db_service)
-        db_service.message_manager = db_message_service
+        message_service = DatabaseMessageService(db_service)
+        db_service.message_manager = message_service
         logger.debug("Initialized database and message services")
         session_service = SessionService(db_service)
         session_manager = SessionManager(session_service)
@@ -161,18 +140,8 @@ async def run_with_interface(interface_type: str = "cli", session_id: Optional[s
         # Ensure agent's graph_state['conversation_state'] uses MessageState with db_manager
         if not hasattr(agent, 'graph_state') or agent.graph_state is None:
             agent.graph_state = {}
-        
-        # Create session and initialize conversation state
         session_id = await session_service.create_session(user_id="developer")
-        logger.debug(f"Created new session with ID: {session_id}")
-        
-        # Initialize MessageState with db_manager and connect to agent's graph state
-        message_state = MessageState(
-            session_id=int(session_id),
-            db_manager=db_service
-        )
-        agent.graph_state['conversation_state'] = message_state
-        logger.debug("Initialized conversation state in agent's graph state")
+        agent.graph_state['conversation_state'] = MessageState(session_id=int(session_id), db_manager=db_service)
 
         # Initialize interface (only CLI supported for now)
         if interface_type != "cli":

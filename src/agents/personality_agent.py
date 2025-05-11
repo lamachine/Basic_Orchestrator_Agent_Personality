@@ -23,13 +23,17 @@ class PersonalityAgent:
     def __init__(self, base_agent: Any, personality_file: str):
         """
         Args:
-            base_agent: The agent to wrap.
+            base_agent: The agent to wrap. Can be None if only used for personality info.
             personality_file: Path to the personality JSON file.
         """
         self.agent = base_agent
         self.personality_file = personality_file
         self.personality = self._load_personality(personality_file)
-        self._setup_passthrough_attributes()
+        
+        # Only set up passthrough attributes if we have a base agent
+        if base_agent is not None:
+            self._setup_passthrough_attributes()
+            
         self.used_knowledge = set()
         self.used_lore = set()
         self.last_context = None
@@ -160,17 +164,11 @@ class PersonalityAgent:
         Inject personality elements into a prompt.
         """
         personality_header = self.create_personality_header()
-        system_patterns = [
-            "You are a helpful AI assistant",
-            "You are an AI assistant",
-            "You are a helpful assistant"
-        ]
-        for pattern in system_patterns:
-            if pattern in prompt:
-                return prompt.replace(pattern, personality_header)
-        lines = prompt.split('\n', 1)
-        if len(lines) > 1 and ("you are" in lines[0].lower() or "assistant" in lines[0].lower()):
-            return f"{personality_header}\n\n{lines[1]}"
+        # Add personality traits after the system prompt but before the conversation
+        lines = prompt.split('\n\n')
+        if len(lines) > 1:
+            # Insert personality after system prompt but before conversation
+            return f"{lines[0]}\n\n{personality_header}\n\n{lines[1]}"
         return f"{personality_header}\n\n{prompt}"
 
     def should_apply_personality(self, prompt: str) -> bool:

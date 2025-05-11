@@ -1,17 +1,60 @@
-"""Tool registry that manages tool discovery and persistence."""
+"""Tool registry that manages tool discovery and execution."""
 
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Set
-import yaml
+from typing import Dict, Any, Optional, List
 import json
 import importlib
 import logging
 from datetime import datetime
+import asyncio
 
 logger = logging.getLogger(__name__)
 
+def get_tool_example(tool_func: Any, tool_name: str) -> Optional[str]:
+    """
+    Get tool example from various possible sources.
+    
+    Args:
+        tool_func: The tool function to extract example from
+        tool_name: Name of the tool for logging
+        
+    Returns:
+        Example string or None if not found
+    """
+    # Try direct example attribute first
+    if hasattr(tool_func, "example"):
+        return tool_func.example
+        
+    # Try usage_examples list
+    if hasattr(tool_func, "usage_examples") and tool_func.usage_examples:
+        return tool_func.usage_examples[0]
+        
+    # Try docstring
+    if tool_func.__doc__:
+        # Look for example in docstring
+        doc_lines = tool_func.__doc__.split('\n')
+        for i, line in enumerate(doc_lines):
+            if "example:" in line.lower() and i + 1 < len(doc_lines):
+                return doc_lines[i + 1].strip()
+                
+    logger.debug(f"No example found for tool: {tool_name}")
+    return None
+
+class ToolWrapper:
+    def __init__(self, func, config=None):
+        self.func = func
+        self.description = getattr(func, "description", f"Tool for {func.__name__.replace('_tool', '')}")
+        self.version = getattr(func, "version", "1.0.0")
+        self.capabilities = getattr(func, "capabilities", [])
+        self.example = get_tool_example(func, func.__name__.replace('_tool', ''))
+        self.config = config
+    
+    async def execute(self, args):
+        """Execute the tool with the given arguments."""
+        return await self.func(**args) if asyncio.iscoroutinefunction(self.func) else self.func(**args)
+
 class ToolRegistry:
-    """Tool registry that scans sub_graphs for tools and manages approvals."""
+    """Tool registry that manages tool discovery and execution."""
     
     def __init__(self, data_dir: str = "src/data/tool_registry"):
         """
@@ -22,194 +65,90 @@ class ToolRegistry:
         """
         self.tools: Dict[str, Any] = {}
         self.tool_configs: Dict[str, dict] = {}
-        self.approved_tools: Set[str] = set()
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
-        # Load approvals immediately
-        self._load_approvals()
-        
-    async def discover_tools(self, auto_approve: bool = False):
-        """
-        Find and register all tools in sub_graphs.
-        
-        Args:
-            auto_approve: Whether to automatically approve newly discovered tools
-        """
-        # Load any persisted state first
+        # Load any persisted state
         self._load_persisted_state()
         
+    async def discover_tools(self):
+        """Find and register all tools in sub_graphs."""
         sub_graphs = Path("src/sub_graphs")
         if not sub_graphs.exists():
             logger.warning("sub_graphs directory not found")
             return
-        
-        # Track newly discovered tools
-        discovered_tools = []
             
+        discovered_tools = []
         # Scan for all agent directories (ending with _agent)
         for tool_dir in sub_graphs.glob("*_agent"):
             if not tool_dir.is_dir():
                 continue
             
-            # Path to tool configuration - add logging to debug path issues
-            logger.debug(f"Checking tool directory: {tool_dir}")
+            # Extract tool name from directory name
+            tool_name = tool_dir.name.replace("_agent", "")
+            logger.debug(f"Looking for tool '{tool_name}' in directory {tool_dir}")
             
-            # Try different possible config locations
-            possible_config_paths = [
-                tool_dir / "src" / "config" / "tool_config.yaml",  # New structure
+            # Look for tool implementation in both possible locations
+            tool_file_paths = [
+                tool_dir / f"{tool_name}_tool.py",  # Direct in agent directory
+                tool_dir / "src" / "tools" / f"{tool_name}_tool.py"  # In src/tools subdirectory
             ]
             
-            config_file = None
-            for path in possible_config_paths:
-                logger.debug(f"Checking for config at: {path}")
-                if path.exists():
-                    config_file = path
-                    logger.debug(f"Found config at: {path}")
-                    break
-                    
-            if not config_file:
-                logger.warning(f"No tool config found in {tool_dir}")
-                continue
-                
-            try:
-                # Load basic config
-                with open(config_file) as f:
-                    config = yaml.safe_load(f)
-                
-                tool_name = config.get("name")
-                if not tool_name:
-                    logger.warning(f"No tool name in config: {config_file}")
-                    continue
-                
-                # Store config regardless of approval status
-                self.tool_configs[tool_name] = config
-                logger.debug(f"Loaded config for tool: {tool_name}")
-                
-                # Check if tool is already approved
-                if tool_name not in self.approved_tools:
-                    if auto_approve:
-                        # Auto-approve if specified
-                        self.approved_tools.add(tool_name)
-                        logger.info(f"Auto-approved tool: {tool_name}")
-                    else:
-                        # Add to discovered list
-                        discovered_tools.append(tool_name)
-                        logger.info(f"Discovered new tool: {tool_name} (pending approval)")
-                        continue  # Skip loading until approved
-                
-                logger.debug(f"Attempting to load implementation for approved tool: {tool_name}")
-                # Only load approved tools
-                # Look for the tool class in two locations:
-                # 1. First check for API interface at the agent root
-                api_file_path = tool_dir / f"{tool_name}_api.py"
-                logger.debug(f"Checking for API at: {api_file_path}")
-                if api_file_path.exists():
-                    logger.debug(f"API file found: {api_file_path}")
-                    module_path = f"src.sub_graphs.{tool_dir.name}.{tool_name}_api"
+            for tool_file_path in tool_file_paths:
+                if tool_file_path.exists():
+                    logger.debug(f"Found tool file at {tool_file_path}")
+                    # Convert path to module path
+                    rel_path = tool_file_path.relative_to(Path("src"))
+                    module_path = f"src.{rel_path.parent.as_posix().replace('/', '.')}.{tool_name}_tool"
                     try:
-                        logger.debug(f"Importing module: {module_path}")
+                        logger.debug(f"Importing module {module_path}")
                         module = importlib.import_module(module_path)
-                        logger.debug(f"Module imported: {module}")
-                        
-                        # Find the API class - usually ends with API 
-                        api_class_found = False
-                        for attr_name in dir(module):
-                            logger.debug(f"Checking attribute: {attr_name}")
-                            if attr_name.lower().endswith('api') and not attr_name.startswith('_'):
-                                api_class = getattr(module, attr_name)
-                                logger.debug(f"Found API class: {api_class}")
-                                self.tools[tool_name] = api_class
-                                api_class_found = True
-                                logger.info(f"Registered API interface: {tool_name} from {module_path}")
-                                break
-                        
-                        if not api_class_found:
-                            logger.warning(f"No API class found in module: {module_path}")
+                        # Look for a function with the same name as the tool
+                        tool_func = getattr(module, f"{tool_name}_tool", None)
+                        if tool_func and callable(tool_func):
+                            logger.debug(f"Found tool function {tool_name}_tool in {module_path}")
+                            
+                            # Check for key attributes
+                            has_desc = hasattr(tool_func, "description")
+                            has_ver = hasattr(tool_func, "version")
+                            has_cap = hasattr(tool_func, "capabilities")
+                            has_ex = hasattr(tool_func, "usage_examples")
+                            
+                            logger.debug(f"Tool {tool_name} attributes: description={has_desc}, " 
+                                        f"version={has_ver}, capabilities={has_cap}, examples={has_ex}")
+                            
+                            if has_desc:
+                                logger.debug(f"Tool {tool_name} description: {tool_func.description[:100]}...")
+                            
+                            # Create tool info
+                            tool_info = {
+                                "name": tool_name,
+                                "description": getattr(tool_func, "description", f"Tool for {tool_name}"),
+                                "version": getattr(tool_func, "version", "1.0.0"),
+                                "capabilities": getattr(tool_func, "capabilities", []),
+                                "example": get_tool_example(tool_func, tool_name)
+                            }
+                            
+                            logger.debug(f"Created tool info for {tool_name}: {tool_info}")
+                            
+                            # Create wrapper instance
+                            tool_class = ToolWrapper(tool_func)
+                            
+                            # Store tool info and instance
+                            self.tool_configs[tool_name] = tool_info
+                            self.tools[tool_name] = tool_class
+                            discovered_tools.append(tool_name)
+                            break  # Found the tool, no need to check other paths
                     except Exception as e:
-                        logger.error(f"Error importing API module {module_path}: {e}", exc_info=True)
-                # 2. If no API interface, check for agent entry point
-                elif (tool_dir / f"{tool_name}_agent.py").exists():
-                    module_path = f"src.sub_graphs.{tool_dir.name}.{tool_name}_agent"
-                    module = importlib.import_module(module_path)
-                    
-                    # Find the agent class
-                    for attr_name in dir(module):
-                        if attr_name.lower().endswith('agent') and not attr_name.startswith('_'):
-                            agent_class = getattr(module, attr_name)
-                            self.tools[tool_name] = agent_class
-                            logger.info(f"Registered agent: {tool_name} from {module_path}")
-                            break
-                else:
-                    # 3. Check for tool implementation in the src/tools directory
-                    module_path = f"src.sub_graphs.{tool_dir.name}.src.tools.{tool_name}_tool"
-                    try:
-                        module = importlib.import_module(module_path)
-                        # Look for a class ending with Tool
-                        for attr_name in dir(module):
-                            if attr_name.lower().endswith('tool') and not attr_name.startswith('_'):
-                                tool_class = getattr(module, attr_name)
-                                self.tools[tool_name] = tool_class
-                                logger.info(f"Registered tool: {tool_name} from {module_path}")
-                                break
-                    except ImportError as e:
-                        logger.error(f"Failed to import tool {tool_name}: {e}")
-                
-                # Persist the updated state
-                self._persist_state()
-                
-            except Exception as e:
-                logger.error(f"Failed to load tool from {tool_dir}: {e}")
-        
-        # Return list of newly discovered tools that need approval
-        return discovered_tools
-    
-    def approve_tool(self, tool_name: str) -> bool:
-        """
-        Approve a tool for use.
-        
-        Args:
-            tool_name: Name of the tool to approve
+                        logger.error(f"Error importing tool module {module_path}: {e}", exc_info=True)
             
-        Returns:
-            True if approval was successful, False otherwise
-        """
-        if tool_name not in self.tool_configs:
-            logger.warning(f"Cannot approve unknown tool: {tool_name}")
-            return False
+            # Persist the updated state
+            self._persist_state()
             
-        self.approved_tools.add(tool_name)
-        logger.info(f"Approved tool: {tool_name}")
-        
-        # Persist approvals
-        self._persist_approvals()
-        return True
-    
-    def revoke_tool(self, tool_name: str) -> bool:
-        """
-        Revoke approval for a tool.
-        
-        Args:
-            tool_name: Name of the tool to revoke
-            
-        Returns:
-            True if revocation was successful, False otherwise
-        """
-        if tool_name not in self.approved_tools:
-            logger.warning(f"Tool {tool_name} is not currently approved")
-            return False
-            
-        self.approved_tools.remove(tool_name)
-        
-        # Also remove from active tools if loaded
-        if tool_name in self.tools:
-            del self.tools[tool_name]
-            
-        logger.info(f"Revoked approval for tool: {tool_name}")
-        
-        # Persist approvals
-        self._persist_approvals()
-        return True
+        if discovered_tools:
+            logger.debug(f"Discovered and registered {len(discovered_tools)} tools: {', '.join(discovered_tools)}")
+        else:
+            logger.debug("No tools discovered")
     
     def get_tool(self, name: str) -> Optional[Any]:
         """
@@ -219,12 +158,9 @@ class ToolRegistry:
             name: Name of the tool
             
         Returns:
-            Tool class or None if not found or not approved
+            Tool class or None if not found
         """
-        # Only return tools that are approved
-        if name in self.approved_tools:
-            return self.tools.get(name)
-        return None
+        return self.tools.get(name)
     
     def get_config(self, name: str) -> Optional[dict]:
         """
@@ -240,26 +176,12 @@ class ToolRegistry:
     
     def list_tools(self) -> List[str]:
         """
-        List all approved and loaded tool names.
+        List all registered tool names.
         
         Returns:
-            List of approved tool names
+            List of tool names
         """
-        # Only return tools that are both approved and loaded
-        result = [name for name in self.tools.keys() if name in self.approved_tools]
-        logger.debug(f"list_tools - approved_tools: {self.approved_tools}")
-        logger.debug(f"list_tools - tools.keys: {list(self.tools.keys())}")
-        logger.debug(f"list_tools - resulting list: {result}")
-        return result
-    
-    def list_all_discovered_tools(self) -> Dict[str, bool]:
-        """
-        List all discovered tools with their approval status.
-        
-        Returns:
-            Dictionary mapping tool names to approval status
-        """
-        return {name: name in self.approved_tools for name in self.tool_configs.keys()}
+        return list(self.tools.keys())
     
     def _persist_state(self):
         """Save current state to data directory."""
@@ -276,21 +198,6 @@ class ToolRegistry:
         except Exception as e:
             logger.error(f"Failed to persist tool state: {e}")
     
-    def _persist_approvals(self):
-        """Save tool approvals to data directory."""
-        try:
-            approvals = {
-                "last_updated": datetime.utcnow().isoformat(),
-                "approved_tools": list(self.approved_tools)
-            }
-            
-            approvals_file = self.data_dir / "approved_tools.json"
-            with open(approvals_file, 'w') as f:
-                json.dump(approvals, f, indent=2)
-                
-        except Exception as e:
-            logger.error(f"Failed to persist tool approvals: {e}")
-    
     def _load_persisted_state(self):
         """Load previously persisted state if it exists."""
         try:
@@ -305,22 +212,7 @@ class ToolRegistry:
             
         except Exception as e:
             logger.error(f"Failed to load persisted tool state: {e}")
-    
-    def _load_approvals(self):
-        """Load previously persisted approvals if they exist."""
-        try:
-            approvals_file = self.data_dir / "approved_tools.json"
-            if not approvals_file.exists():
-                return
-                
-            with open(approvals_file) as f:
-                approvals = json.load(f)
-                
-            self.approved_tools = set(approvals.get("approved_tools", []))
-            
-        except Exception as e:
-            logger.error(f"Failed to load persisted tool approvals: {e}")
             
     def __repr__(self) -> str:
         """String representation of the registry."""
-        return f"ToolRegistry(tools={list(self.tools.keys())}, approved={list(self.approved_tools)})" 
+        return f"ToolRegistry(tools={list(self.tools.keys())})" 

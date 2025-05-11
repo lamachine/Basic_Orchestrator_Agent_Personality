@@ -76,23 +76,20 @@ database:
 
 # --- Personality config is now handled in src/config/personality_config.py ---
 personality:
+  default_personality: valet
   personalities:
-    # List your personalities here. The first enabled will be default at startup.
-    # - name: my_character
-    #   enabled: true
-    #   file_path: path/to/your/character1.json
-    # - name: another_character
-    #   enabled: false
-    #   file_path: path/to/your/character2.json
-    - name: valet
+    valet:
       enabled: true
       file_path: src/agents/Character_Ronan_valet_orchestrator.json
-    - name: personal_assistant
+      use_by_default: true
+    personal_assistant:
       enabled: true
       file_path: src/agents/Character_Ronan_personal_assistant.json
-    - name: librarian
+      use_by_default: false
+    librarian:
       enabled: false
       file_path: src/agents/Character_Ronan_librarian.json
+      use_by_default: false
 
 # --- General config is handled in src/config/user_config.py ---
 general:

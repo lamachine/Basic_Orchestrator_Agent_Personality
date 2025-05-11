@@ -67,12 +67,12 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
                 "request_type": "sub_graph_approval",
                 "timestamp": datetime.now().isoformat()
             }
-            logger.info(f"Requesting approval for sub-graph: {requested_sub_graph}")
+            logger.debug(f"Requesting approval for sub-graph: {requested_sub_graph}")
             return approval_message
         if requested_sub_graph and requested_sub_graph not in sub_graphs:
             # Auto-instantiate sub-graph (placeholder logic)
             sub_graphs[requested_sub_graph] = {"initialized_at": datetime.now().isoformat()}
-            logger.info(f"Auto-instantiated sub-graph: {requested_sub_graph}")
+            logger.debug(f"Auto-instantiated sub-graph: {requested_sub_graph}")
         # --- End sub-graph instantiation/approval ---
 
         # --- StateManager instantiation and request ID chaining ---

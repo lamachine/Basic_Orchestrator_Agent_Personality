@@ -162,6 +162,10 @@ def setup_logging(config=None):
     root_logger = logging.getLogger()
     root_logger.setLevel(log_config['log_levels']['root'])  # DEBUG by default
     
+    # Remove any existing handlers to prevent duplicates
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
     # File handler gets everything
     file_handler.setLevel(log_config['log_levels']['file'])  # DEBUG by default
     file_handler.setFormatter(file_formatter)

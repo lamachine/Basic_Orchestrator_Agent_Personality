@@ -205,7 +205,30 @@ class UserConfig:
         return self.config.get('logging', DEFAULT_CONFIG['logging'])
 
     def get_personality_config(self) -> dict:
-        return self.config.get('personality', DEFAULT_CONFIG['personality'])
+        """
+        Get personality configuration.
+        
+        Returns:
+            Dictionary with personality configuration
+        """
+        personality_config = self.config.get('personality', DEFAULT_CONFIG['personality'])
+        
+        # If the personalities section contains a list instead of a dict, convert it
+        if 'personalities' in personality_config and isinstance(personality_config['personalities'], list):
+            # Convert from list format to dict format
+            converted = {}
+            for item in personality_config['personalities']:
+                if 'name' in item and isinstance(item['name'], str):
+                    name = item.pop('name')  # Remove name key and get its value
+                    converted[name] = item
+            
+            # Replace the list with the dict
+            personality_config['personalities'] = converted
+            
+            # Log the conversion
+            self.logger.debug(f"Converted personalities from list to dict format: {converted.keys()}")
+        
+        return personality_config
 
     def get_ui_config(self) -> dict:
         return self.config.get('ui', DEFAULT_CONFIG['ui'])

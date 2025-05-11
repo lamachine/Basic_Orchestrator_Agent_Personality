@@ -10,6 +10,7 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 from pydantic import BaseModel, ValidationError
+import asyncio
 
 from src.sub_graphs.personal_assistant_agent.src.cli.sub_graph_interface import handle_cli_tool_request
 
@@ -28,7 +29,8 @@ class ToolMessage(BaseModel):
     parent_request_id: Optional[str] = None
     timestamp: str
 
-def personal_assistant_tool(task: str, parameters: Optional[Dict[str, Any]] = None, request_id: str = None) -> Dict[str, Any]:
+# Tool metadata defined at module level
+async def personal_assistant_tool(task: str, parameters: Optional[Dict[str, Any]] = None, request_id: str = None) -> Dict[str, Any]:
     """
     Entrypoint for orchestrator/parent graph to call the personal assistant tool.
 
@@ -60,29 +62,134 @@ def personal_assistant_tool(task: str, parameters: Optional[Dict[str, Any]] = No
             "request_id": request_id,
             "timestamp": datetime.utcnow().isoformat()
         }
-    logger.info(f"personal_assistant_tool received task: {task} (request_id={request_id})")
-    logger.debug(f"personal_assistant_tool parameters: {parameters} (request_id={request_id})")
+    
+    # Just log at debug level to avoid duplicates - the actual tool implementation will log at info level
+    logger.debug(f"personal_assistant_tool passing task: {task} (request_id={request_id})")
+    
     try:
-        response = handle_cli_tool_request(validated_input.task, validated_input.parameters, validated_input.request_id)
-        ToolMessage.parse_obj(response)
-        response["request_id"] = request_id
-        response["timestamp"] = response.get("timestamp", datetime.utcnow().isoformat())
-        return response
-    except ValidationError as ve:
-        logger.error(f"Output validation error in personal_assistant_tool (request_id={request_id}): {ve}")
+        # Check if this is an email-related request
+        if "email" in task.lower():
+            return await _handle_email_request(validated_input)
+        elif "tasks" in task.lower():
+            return await _handle_tasks_request(validated_input)
+        else:
+            return await _handle_other_request(validated_input)
+    except Exception as e:
+        logger.error(f"Unexpected error in personal_assistant_tool (request_id={request_id}): {str(e)}")
         return {
             "status": "error",
-            "message": f"Output validation error: {ve}",
+            "message": f"Unexpected error: {str(e)}",
             "data": None,
             "request_id": request_id,
             "timestamp": datetime.utcnow().isoformat()
         }
-    except Exception as e:
-        logger.error(f"Error in personal_assistant_tool (request_id={request_id}): {e}")
+
+async def _handle_email_request(input_data: PersonalAssistantToolInput) -> Dict[str, Any]:
+    """
+    Handle email-related requests with a simulated delay.
+    
+    Args:
+        input_data: Validated input data containing task and request_id
+        
+    Returns:
+        Dict[str, Any]: Standardized response with email results
+    """
+    try:
+        # Simulate processing delay
+        await asyncio.sleep(30)
+        
         return {
-            "status": "error",
-            "message": f"Error in personal_assistant_tool: {str(e)}",
-            "data": None,
-            "request_id": request_id,
+            "status": "completed",
+            "message": "Email returned zero unread.",
+            "data": {
+                "email_count": 0,
+                "task": input_data.task,
+                "processed_at": datetime.utcnow().isoformat()
+            },
+            "request_id": input_data.request_id,
             "timestamp": datetime.utcnow().isoformat()
-        } 
+        }
+    except Exception as e:
+        logger.error(f"Error in _handle_email_request (request_id={input_data.request_id}): {str(e)}")
+        raise
+
+async def _handle_tasks_request(input_data: PersonalAssistantToolInput) -> Dict[str, Any]:
+    """
+    Handle tasks-related requests with a simulated delay.
+    
+    Args:
+        input_data: Validated input data containing task and request_id
+        
+    Returns:
+        Dict[str, Any]: Standardized response with tasks results
+    """
+    try:
+        # Simulate processing delay
+        await asyncio.sleep(30)
+        
+        return {
+            "status": "completed",
+            "message": "Task function returned zero open tasks.",
+            "data": {
+                "task_count": 0,
+                "task": input_data.task,
+                "processed_at": datetime.utcnow().isoformat()
+            },
+            "request_id": input_data.request_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error in _handle_tasks_request (request_id={input_data.request_id}): {str(e)}")
+        raise
+
+async def _handle_other_request(input_data: PersonalAssistantToolInput) -> Dict[str, Any]:
+    """
+    Handle non-email and non-tasks requests.
+    
+    Args:
+        input_data: Validated input data containing task and request_id
+        
+    Returns:
+        Dict[str, Any]: Standardized response for other tasks
+    """
+    try:
+        # Simulate processing delay
+        await asyncio.sleep(5)
+        
+        return {
+            "status": "completed",
+            "message": f"No appropriate tools found for {input_data.task}",
+            "data": {
+                "task": input_data.task,
+                "processed_at": datetime.utcnow().isoformat()
+            },
+            "request_id": input_data.request_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error in _handle_other_request (request_id={input_data.request_id}): {str(e)}")
+        raise
+
+# Define tool metadata at module level so it's available at import time
+personal_assistant_tool.description = """Personal assistant tool for managing your digital life. 
+Capabilities include:
+- Email management: Check inbox, send emails, manage drafts
+- Task management: Create, update, and track tasks and to-do lists
+- Calendar operations: Schedule meetings, check availability, manage events
+- Reminder system: Set and manage reminders for tasks and events
+
+The tool integrates with various services to provide a unified personal assistant experience."""
+
+personal_assistant_tool.version = "1.0.0"
+personal_assistant_tool.capabilities = [
+    "email_operations",
+    "task_list_operations",
+    "calendar_operations",
+    "reminder_operations"
+]
+personal_assistant_tool.usage_examples = [
+    "User: 'Check my email'\nTool: personal_assistant\nMessage: 'check email'",
+    "User: 'Send an email to john@example.com with subject Meeting and body Let's meet tomorrow'\nTool: personal_assistant\nMessage: 'send email to john@example.com with subject Meeting and body Let's meet tomorrow'",
+    "User: 'Add a task Buy groceries to my task list'\nTool: personal_assistant\nMessage: 'add task Buy groceries'",
+    "User: 'Show my tasks for today'\nTool: personal_assistant\nMessage: 'show tasks for today'"
+] 

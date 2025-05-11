@@ -19,7 +19,7 @@ logging.getLogger("src.tools.registry.tool_registry").setLevel(logging.DEBUG)
 
 async def main():
     """Run the tool discovery test."""
-    logger.info("Starting tool discovery test...")
+    logger.debug("Starting tool discovery test...")
     
     # Get registry reference
     registry = get_registry()
@@ -38,12 +38,12 @@ async def main():
     
     # Print discovered tools
     all_tools = registry.list_all_discovered_tools()
-    logger.info(f"All discovered tools: {all_tools}")
-    logger.info(f"Newly approved tools: {newly_approved}")
+    logger.debug(f"All discovered tools: {all_tools}")
+    logger.debug(f"Newly approved tools: {newly_approved}")
     
     # Print approved tools and check actual loaded tools
     approved_tools = registry.list_tools()
-    logger.info(f"Approved and loaded tools: {approved_tools}")
+    logger.debug(f"Approved and loaded tools: {approved_tools}")
     logger.debug(f"Raw approved_tools set: {registry.approved_tools}")
     logger.debug(f"Raw tools dict keys: {list(registry.tools.keys())}")
     
@@ -70,7 +70,7 @@ async def main():
     except Exception as e:
         logger.error(f"Error with manual import/execution: {e}", exc_info=True)
     
-    logger.info("Tool discovery test complete!")
+    logger.debug("Tool discovery test complete!")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

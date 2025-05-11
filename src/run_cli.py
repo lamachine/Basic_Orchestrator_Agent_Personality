@@ -5,6 +5,10 @@ This script is a thin wrapper that calls the main orchestrator
 with the CLI interface selected.
 """
 
+# Import and call setup_logging first to initialize logging before any other imports
+from src.config.logging_config import setup_logging
+setup_logging()
+
 from src.main import run_with_interface
 import asyncio
 

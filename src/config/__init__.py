@@ -26,10 +26,48 @@ class Configuration:
     def __init__(self):
         self.llm = get_llm_config()
         self.user_config = get_user_config()
-        # Expose personality settings
-        personality_cfg = self.user_config.get_personality_config()
-        self.personality_enabled = personality_cfg.get('enabled', True)
-        self.personality_file_path = personality_cfg.get('file_path', None)
+        
+        # Expose personality settings - with better handling of structure
+        try:
+            # Get personality config 
+            personality_cfg = self.user_config.get_personality_config()
+            
+            # Check if we have a personalities dict (new format)
+            if isinstance(personality_cfg, dict) and 'personalities' in personality_cfg:
+                # New format with multiple personalities
+                self.personality_enabled = True
+                
+                # Get the default personality name
+                default_name = personality_cfg.get('default_personality')
+                
+                # Get all personalities
+                personalities = personality_cfg.get('personalities', {})
+                
+                # Find default personality - either by default_name or first enabled one
+                if default_name and default_name in personalities:
+                    persona = personalities[default_name]
+                    self.personality_file_path = persona.get('file_path')
+                else:
+                    # Find first enabled personality
+                    for name, persona in personalities.items():
+                        if persona.get('enabled', True):
+                            self.personality_file_path = persona.get('file_path')
+                            break
+            else:
+                # Old format - simpler
+                self.personality_enabled = personality_cfg.get('enabled', True)
+                self.personality_file_path = personality_cfg.get('file_path')
+                
+            # Debug
+            logger.debug(f"Configuration: personality_enabled={self.personality_enabled}")
+            logger.debug(f"Configuration: personality_file_path={self.personality_file_path}")
+            
+        except Exception as e:
+            logger.error(f"Error loading personality config: {e}", exc_info=True)
+            # Set defaults
+            self.personality_enabled = True
+            self.personality_file_path = 'src/agents/Character_Ronan_valet_orchestrator.json'
+            
         # Add any other global settings as needed
 
     @property

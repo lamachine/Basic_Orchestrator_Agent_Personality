@@ -23,7 +23,7 @@ from src.tools.initialize_tools import discover_and_initialize_tools, console_pr
 
 async def run_with_tools():
     """Run the CLI with tool discovery integrated."""
-    logger.info("Starting tool discovery process...")
+    logger.debug("Starting tool discovery process...")
     
     # First, discover and initialize tools
     newly_approved = await discover_and_initialize_tools(
@@ -32,10 +32,10 @@ async def run_with_tools():
     )
     
     if newly_approved:
-        logger.info(f"Newly approved tools: {newly_approved}")
+        logger.debug(f"Newly approved tools: {newly_approved}")
     
     # Then run the main CLI
-    logger.info("Tool discovery complete, starting CLI...")
+    logger.debug("Tool discovery complete, starting CLI...")
     from src.main import run_with_interface
     await run_with_interface("cli")
 

@@ -26,43 +26,26 @@ class PersonalAssistantTool:
         self.config = config or {}
         self.name = "personal_assistant"
         self.description = "Handles emails, messages, to-do lists, and calendar integration"
-        logger.info(f"Initialized {self.name} tool")
+        logger.debug(f"Initialized {self.name} tool")
         
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Route to the correct tool (tasks, email, etc.).
-        Remove dummy async delay/canned response logic for orchestrator use.
-        Only keep dummy logic for tools that are not implemented yet.
+        Execute a personal assistant task.
+        
+        Args:
+            args: Dictionary containing task parameters
+                task: The task string to process
+                request_id: Optional request ID for tracking
+                
+        Returns:
+            Dictionary with response data
         """
-        import uuid
-        # Defensive: flatten nested JSON in 'task' if present
-        if isinstance(args.get('task'), dict):
-            # If task is a dict, try to extract a string description
-            task = args['task'].get("task") or str(args['task'])
-            args['task'] = task
-        elif isinstance(args.get('task'), str) and args['task'].strip().startswith("{") and args['task'].strip().endswith("}"):
-            try:
-                parsed = json.loads(args['task'])
-                if isinstance(parsed, dict) and "task" in parsed:
-                    args['task'] = parsed["task"]
-            except Exception:
-                pass
-        # Only keep 'task' and 'request_id' in args
-        args = {k: v for k, v in args.items() if k in ("task", "request_id")}
         task = args.get("task", "")
-        request_id = args.get("request_id") or str(uuid.uuid4())
+        request_id = args.get("request_id", f"req-{datetime.now().strftime('%Y%m%d%H%M%S%f')}")
         session_state = args.get("session_state")
-        logger.info(f"[PA.execute] Entry: request_id={request_id}, task={task}, args={args}")
-        # Log receipt of tool command
-        if session_state:
-            await log_and_persist_message(
-                session_state,
-                MessageRole.TOOL,
-                f"Received tool command: {args}",
-                metadata={"tool": self.name, "args": args, "request_id": request_id},
-                sender="personal_assistant.graph",
-                target="orchestrator.personal_assistant"
-            )
+        
+        logger.debug(f"[PA.execute] Start: request_id={request_id}, task={task}")
+        
         # Log acknowledgement to LLM
         if session_state:
             await log_and_persist_message(
@@ -73,30 +56,47 @@ class PersonalAssistantTool:
                 sender="personal_assistant.graph",
                 target="personal_assistant.llm"
             )
+
         # Determine which sub-tool to use based on the task string
         task_lower = task.lower()
         if any(word in task_lower for word in ["email", "inbox", "mail"]):
             logger.debug(f"[PA.execute] Routing to EMAIL_TOOL: request_id={request_id}, args={args}")
             from src.sub_graphs.personal_assistant_agent.src.tools.personal_assistant_tool import EMAIL_TOOL
             try:
-                email_response = await EMAIL_TOOL.execute(args)
-                logger.info(f"[PA.execute] Email tool response: request_id={request_id}, response={email_response}")
+                # Start the email operation in the background
+                asyncio.create_task(self._handle_email_operation(EMAIL_TOOL, args, request_id))
+                # Return immediately with a status message
+                return {
+                    "status": "processing",
+                    "message": "Email operation started",
+                    "request_id": request_id
+                }
             except Exception as e:
                 logger.error(f"[PA.execute] Error in EMAIL_TOOL: request_id={request_id}, error={e}")
-                email_response = {"status": "error", "message": str(e), "request_id": request_id}
-            logger.info(f"[PA.execute] Exit: request_id={request_id}, result={email_response}")
-            return email_response
+                return {
+                    "status": "error",
+                    "message": str(e),
+                    "request_id": request_id
+                }
         if any(word in task_lower for word in ["task list", "task", "todo", "to-do"]):
             logger.debug(f"[PA.execute] Routing to TASKS_TOOL: request_id={request_id}, args={args}")
             from src.sub_graphs.personal_assistant_agent.src.tools.personal_assistant_tool import TASKS_TOOL
             try:
-                task_tool_response = await TASKS_TOOL.execute(args)
-                logger.info(f"[PA.execute] Task tool response: request_id={request_id}, response={task_tool_response}")
+                # Start the task operation in the background
+                asyncio.create_task(self._handle_task_operation(TASKS_TOOL, args, request_id))
+                # Return immediately with a status message
+                return {
+                    "status": "processing",
+                    "message": "Task list operation started",
+                    "request_id": request_id
+                }
             except Exception as e:
                 logger.error(f"[PA.execute] Error in TASKS_TOOL: request_id={request_id}, error={e}")
-                task_tool_response = {"status": "error", "message": str(e), "request_id": request_id}
-            logger.info(f"[PA.execute] Exit: request_id={request_id}, result={task_tool_response}")
-            return task_tool_response
+                return {
+                    "status": "error",
+                    "message": str(e),
+                    "request_id": request_id
+                }
         # Fallback: handle 'task list' requests directly
         if "task list" in task_lower or ("task" in task_lower and "check" in task_lower):
             logger.debug(f"[PA.execute] Handling fallback dummy task list: request_id={request_id}, task={task}")
@@ -124,7 +124,7 @@ class PersonalAssistantTool:
                     sender="personal_assistant.graph",
                     target="orchestrator.personal_assistant"
                 )
-            logger.info(f"[PA.execute] Exit: request_id={request_id}, result={dummy_response}")
+            logger.debug(f"[PA.execute] Exit: request_id={request_id}, result={dummy_response}")
             return dummy_response
         logger.warning(f"[PA.execute] Unknown or unimplemented tool: request_id={request_id}, task={task}")
         result = {
@@ -135,9 +135,43 @@ class PersonalAssistantTool:
             "message": f"Unknown or unimplemented tool for task: {task}",
             "timestamp": datetime.now().isoformat()
         }
-        logger.info(f"[PA.execute] Exit: request_id={request_id}, result={result}")
+        logger.debug(f"[PA.execute] Exit: request_id={request_id}, result={result}")
         return result
     
+    async def _handle_email_operation(self, email_tool, args: Dict[str, Any], request_id: str):
+        """Handle email operations in the background."""
+        try:
+            email_response = await email_tool.execute(args)
+            logger.debug(f"[PA.execute] Email tool response: request_id={request_id}, response={email_response}")
+            # Update the pending requests with the result
+            if request_id in PENDING_TOOL_REQUESTS:
+                PENDING_TOOL_REQUESTS[request_id] = email_response
+        except Exception as e:
+            logger.error(f"[PA.execute] Error in email operation: request_id={request_id}, error={e}")
+            if request_id in PENDING_TOOL_REQUESTS:
+                PENDING_TOOL_REQUESTS[request_id] = {
+                    "status": "error",
+                    "message": str(e),
+                    "request_id": request_id
+                }
+
+    async def _handle_task_operation(self, task_tool, args: Dict[str, Any], request_id: str):
+        """Handle task operations in the background."""
+        try:
+            task_response = await task_tool.execute(args)
+            logger.debug(f"[PA.execute] Task tool response: request_id={request_id}, response={task_response}")
+            # Update the pending requests with the result
+            if request_id in PENDING_TOOL_REQUESTS:
+                PENDING_TOOL_REQUESTS[request_id] = task_response
+        except Exception as e:
+            logger.error(f"[PA.execute] Error in task operation: request_id={request_id}, error={e}")
+            if request_id in PENDING_TOOL_REQUESTS:
+                PENDING_TOOL_REQUESTS[request_id] = {
+                    "status": "error",
+                    "message": str(e),
+                    "request_id": request_id
+                }
+
     async def _handle_email_task(self, task: str) -> Dict[str, Any]:
         """Handle email-related tasks."""
         await asyncio.sleep(1)  # Simulate API call
@@ -196,10 +230,14 @@ class DummyEmailTool:
     """Dummy tool for checking new email."""
     name = "email"
 
+    def __init__(self, **kwargs):
+        pass
+
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
         import asyncio
         await asyncio.sleep(5)  # Simulate delay
         task = args.get("task", "")
+        request_id = args.get("request_id", "unknown")
         if "check" in task and "email" in task:
             return {
                 "type": "result",
@@ -220,7 +258,7 @@ class DummyEmailTool:
                     "dummy": True
                 },
                 "timestamp": datetime.now().isoformat(),
-                "request_id": args.get("request_id")
+                "request_id": request_id
             }
         return {
             "type": "error",
@@ -228,7 +266,7 @@ class DummyEmailTool:
             "tool": self.name,
             "message": f"Unknown or unsupported email task: {task}",
             "timestamp": datetime.now().isoformat(),
-            "request_id": args.get("request_id")
+            "request_id": request_id
         }
 
 class GoogleTasksTool:

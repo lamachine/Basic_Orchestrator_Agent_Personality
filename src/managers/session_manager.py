@@ -14,6 +14,7 @@ from src.managers.db_manager import DBService
 from src.services.logging_service import get_logger
 from src.services.session_service import SessionService
 from src.utils.datetime_utils import format_datetime, parse_datetime, now
+from src.state.state_models import MessageState
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -44,6 +45,17 @@ class SessionManager:
             name=name,
             user_id=user_id
         )
+        
+        # Ensure agent's graph_state has the correct MessageState
+        if hasattr(self, 'agent') and self.agent:
+            if not hasattr(self.agent, 'graph_state'):
+                self.agent.graph_state = {}
+            self.agent.graph_state['conversation_state'] = MessageState(
+                session_id=int(session_id),
+                db_manager=self.session_service.db_service
+            )
+            logger.debug(f"Initialized session state in agent's graph_state for session ID: {session_id}")
+            
         return session_id
 
     async def restore_session(self, session_id: Union[str, int], user_id: str = "developer") -> bool:

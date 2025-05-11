@@ -1,53 +1,17 @@
 {
-  "last_updated": "2025-05-07T00:40:52.764973",
+  "last_updated": "2025-05-11T21:15:49.550073",
   "configs": {
     "personal_assistant": {
       "name": "personal_assistant",
-      "description": "Handles emails, messages, to-do lists, and calendar integration.",
-      "version": "0.1.0",
-      "config": {
-        "default_email": "user@example.com",
-        "max_retries": 3,
-        "timeout_seconds": 30,
-        "default_timezone": "UTC"
-      },
+      "description": "Personal assistant tool for managing your digital life. \nCapabilities include:\n- Email management: Check inbox, send emails, manage drafts\n- Task management: Create, update, and track tasks and to-do lists\n- Calendar operations: Schedule meetings, check availability, manage events\n- Reminder system: Set and manage reminders for tasks and events\n\nThe tool integrates with various services to provide a unified personal assistant experience.",
+      "version": "1.0.0",
       "capabilities": [
-        "email",
-        "calendar",
-        "tasks",
-        "reminders"
+        "email_operations",
+        "task_list_operations",
+        "calendar_operations",
+        "reminder_operations"
       ],
-      "api": {
-        "calendar": {
-          "provider": "google",
-          "scopes": [
-            "https://www.googleapis.com/auth/calendar",
-            "https://www.googleapis.com/auth/calendar.events"
-          ],
-          "auth_type": "oauth2"
-        },
-        "email": {
-          "provider": "google",
-          "scopes": [
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/gmail.send"
-          ],
-          "auth_type": "oauth2"
-        }
-      },
-      "metadata": {
-        "author": "Basic Orchestrator",
-        "created": "2024-05-15",
-        "usage_examples": [
-          "{\"task\": \"check my task list\"}",
-          "{\"task\": \"add new task: Finish report for Smith project\"}",
-          "{\"task\": \"check my email inbox\"}",
-          "{\"task\": \"send an email to John about the meeting tomorrow\"}",
-          "{\"task\": \"add a reminder to buy groceries at 6pm\"}",
-          "{\"task\": \"check my calendar for next week\"}",
-          "{\"task\": \"create a new task to finish the report\"}"
-        ]
-      }
+      "example": "User: 'Check my email'\nTool: personal_assistant\nMessage: 'check email'"
     }
   }
 }
