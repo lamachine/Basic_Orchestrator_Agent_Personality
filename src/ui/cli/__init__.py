@@ -1,5 +1,3 @@
-"""CLI interface package."""
-
-from src.ui.cli.interface import CLIInterface
-
-__all__ = ['CLIInterface'] 
+"""
+Command Line Interface (CLI) for interacting with the agent system.
+""" 

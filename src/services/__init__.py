@@ -1,10 +1,10 @@
 """
-Service layer implementations.
-"""
+Core services for the orchestrator system.
 
-# Attempt to import MCP services if available
-try:
-    from . import mcp_services
-except ImportError:
-    # MCP services are optional, so we can continue without them
-    pass 
+This package provides essential services for:
+- Database operations
+- Logging
+- Message handling
+- Session management
+- LLM interactions
+""" 

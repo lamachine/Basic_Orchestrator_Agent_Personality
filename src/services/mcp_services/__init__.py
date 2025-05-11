@@ -1,9 +1,6 @@
-"""MCP services for Multi-agent Communication Protocol."""
+"""
+MCP (Mission Control Protocol) services for managing agent communication and state.
 
-from .mcp_adapter import MCPAdapter, check_mcp_status, PENDING_MCP_REQUESTS
-
-__all__ = [
-    "MCPAdapter",
-    "check_mcp_status",
-    "PENDING_MCP_REQUESTS"
-] 
+This package provides services for handling multi-agent communication
+and coordination through the MCP protocol.
+""" 

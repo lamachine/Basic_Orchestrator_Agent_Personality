@@ -17,7 +17,7 @@ from src.config import Configuration
 from src.agents.orchestrator_agent import OrchestratorAgent
 from src.agents.llm_query_agent import LLMQueryAgent
 from src.agents.personality_agent import PersonalityAgent
-from src.ui.cli import CLIInterface
+from src.ui.cli.interface import CLIInterface
 from src.managers.session_manager import SessionManager
 from src.services.session_service import SessionService
 from src.managers.db_manager import DBService

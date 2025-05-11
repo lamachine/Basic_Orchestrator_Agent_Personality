@@ -1,4 +1,6 @@
-"""Personal Assistant agent package."""
+"""
+Personal assistant agent implementation.
+"""
 
 # This package contains the Personal Assistant agent implementation
 

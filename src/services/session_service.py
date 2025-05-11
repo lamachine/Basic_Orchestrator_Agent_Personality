@@ -6,7 +6,7 @@ from datetime import datetime
 from src.managers.db_manager import DBService
 from src.services.logging_service import get_logger
 from src.utils.datetime_utils import format_datetime, parse_datetime, now, timestamp, DateTimeEncoder
-from src.state import SessionState
+from src.state.state_exports import SessionState
 
 logger = get_logger(__name__)
 

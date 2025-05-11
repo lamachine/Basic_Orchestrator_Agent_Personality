@@ -10,7 +10,7 @@ import io
 import sys
 from datetime import datetime
 
-from src.ui.cli import CLIInterface
+from src.ui.cli.interface import CLIInterface
 
 class TestCLIInterface(unittest.TestCase):
     """Test cases for the CLIInterface class."""

@@ -1,4 +1,3 @@
-"""Tool imports and initialization."""
-
-# Export the tools
-__all__ = [] 
+"""
+Core tools for the orchestrator system.
+""" 
