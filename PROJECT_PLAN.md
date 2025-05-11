@@ -20,28 +20,52 @@ The project follows a modular architecture with clear separation of concerns:
 #### Agents
 - `BaseAgent`: Foundation class for all agents
 - `OrchestratorAgent`: Central coordinator for the agent ecosystem
+  - Simplified process_message method
+  - Streamlined tool handling with async execution
+  - Personality injection capability
+  - Improved conversation state management
+  - Enhanced logging with [PROMPT_CHAIN] prefixes
 - `LLMQueryAgent`: Core LLM orchestration agent
 - `PersonalityAgent`: Injects personality into agent responses
 
 #### Services
 - `LLMService`: Interface to LLM providers (Ollama)
 - `DBService`: Database operations and persistence
+  - Consistent environment variable handling
+  - Standardized CRUD operations
+  - Robust error handling
 - `LoggingService`: Centralized logging system
 - `SessionService`: Session management
+- `MessageService`: Message handling and persistence
+  - Fixed add_message implementation
+  - Aligned with MessageState usage
+  - Verified database integration
+  - Confirmed error handling
 
 #### Managers
 - `SessionManager`: Handles user sessions
 - `DBManager`: Coordinates database operations
+  - Core functionality verified across versions
+  - Standardized environment variables
+  - Consistent error handling
 - `StateManager`: Manages application state
 
 #### Tools
 - `ToolRegistry`: Registry of available tools
+  - Simplified tool registration system
+  - Removed approval system
+  - Streamlined tool discovery
+  - Added state persistence
+  - Basic tool execution support
 - `ToolProcessor`: Tool response processing utilities
 - Various tool implementations
 
 #### UI
 - `BaseUserInterface`: Abstract interface class
 - `CLIInterface`: Command-line interface
+  - Improved display handler
+  - Better message formatting
+  - Enhanced user experience
 - (Planned) `APIInterface`: RESTful API
 - (Planned) `WebInterface`: Web UI
 
@@ -70,6 +94,7 @@ The project follows a modular architecture with clear separation of concerns:
 - Target length: 200 lines to take advantage of Cursor file reading limit.  
 - Maximum file length: 500 lines
 - One class per file (with exceptions for closely related small classes)
+- Clean `__init__.py` files with only docstrings
 
 ### Error Handling
 - Use try/except blocks with specific exceptions
@@ -80,6 +105,23 @@ The project follows a modular architecture with clear separation of concerns:
 - Unit tests for all components
 - Tests follow same structure as main code
 - At least 3 test cases per component (success, failure, edge)
+- Test Coverage Requirements:
+  - Core Components (Agents, Services, Tools): 80% minimum coverage
+  - UI Components: 70% minimum coverage
+  - Integration Points: 90% minimum coverage
+- Test Categories:
+  - Unit Tests: Individual component functionality
+  - Integration Tests: Component interaction and data flow
+  - End-to-End Tests: Complete user workflows
+- Test Organization:
+  - Mirror src/ directory structure in tests/
+  - One test file per module
+  - Fixtures in conftest.py for shared test setup
+- Test Documentation:
+  - Clear test descriptions
+  - Arrange/Act/Assert pattern
+  - Mock external dependencies
+  - Document test data requirements
 
 ## Current Priorities
 
@@ -88,6 +130,11 @@ The project follows a modular architecture with clear separation of concerns:
 3. Implement sub-graph support
 4. Add personal assistant features
 5. Expand tool ecosystem with Google integration
+6. Maintain and expand test coverage:
+   - Complete message service tests
+   - Enhance orchestrator agent tests
+   - Add integration tests for tool registry
+   - Implement end-to-end workflow tests
 
 ## Future Plans
 

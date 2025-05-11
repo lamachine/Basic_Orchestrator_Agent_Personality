@@ -20,11 +20,37 @@ The system follows these key principles:
 
 ## System Components
 
-The system has three main components:
+The system has these main components:
 
 1. **Tool Registry**: Discovers, validates, and loads tools
+   - Dynamic tool discovery
+   - Configuration validation
+   - State persistence
+   - Tool approval management
+
 2. **Tool Interface**: Standardized communication between orchestrator and tools
+   - Message passing protocol
+   - Request tracking system
+   - State management
+   - Error handling
+
 3. **Tool Implementation**: Individual tool functionality
+   - Core business logic
+   - Sub-tool management
+   - State persistence
+   - Error recovery
+
+4. **State Management**: Handles tool state and persistence
+   - Request tracking
+   - Message history
+   - Tool state persistence
+   - Session management
+
+5. **Communication Layer**: Manages inter-tool communication
+   - Message routing
+   - Request/response handling
+   - Error propagation
+   - State synchronization
 
 ## Tool Discovery and Loading
 
@@ -43,37 +69,72 @@ Each tool follows this standardized structure:
 
 ```
 /<name>_agent/
-    .env, requirements.txt, README.md, LICENSE, gitignore etc.
-    /logs
-    /tests
-    <toolname>_tool.py  # Pydantic model for parent graph
+    .env                    # Environment variables
+    requirements.txt        # Dependencies
+    README.md              # Tool documentation
+    LICENSE                # License information
+    .gitignore            # Git ignore rules
+    
+    /logs                  # Log files
+    /tests                 # Test files
+        test_<toolname>.py # Tool-specific tests
+        conftest.py        # Shared test fixtures
+    
+    <toolname>_tool.py     # Pydantic model for parent graph
+    
     /src
-        /agents                       # Business logic
-        /config                       # Configuration files
-            tool_config.yaml          # Tool registry info
-            <tool>_config.yaml        # Tool-specific config
-        /db
-        /graphs
-        /managers
-        /services
-        /state
-        /sub_graphs                   # Sub-tools this tool may use
-        /tools                        # Tool implementations
-        /ui                           # Connection points to user or parent graph
-        /utils
-        main.py
+        /agents            # Business logic
+            <toolname>_agent.py
+            base_agent.py  # Base agent class
+        
+        /config            # Configuration files
+            tool_config.yaml    # Tool registry info
+            graph_config.py     # Graph-specific settings
+            llm_config.py       # LLM configuration
+            db_config.py        # Database configuration
+        
+        /db               # Database models and operations
+            models.py
+            operations.py
+        
+        /graphs           # LangGraph workflow definitions
+            <toolname>_graph.py
+        
+        /managers         # State and session management
+            state_manager.py
+            session_manager.py
+        
+        /services         # Core services
+            llm_service.py
+            message_service.py
+            db_service.py
+        
+        /state           # State models and persistence
+            state_models.py
+            state_manager.py
+        
+        /sub_graphs      # Sub-tools this tool may use
+            /<subtool>_agent/
+                # (Same structure as parent)
+        
+        /tools           # Tool implementations
+            <toolname>_tool.py
+            tool_utils.py
+        
+        /ui              # Connection points
+            sub_graph_interface.py
+            cli_interface.py
+        
+        /utils           # Utility functions
+            logging_utils.py
+            error_utils.py
+        
+        main.py          # Entry point
 ```
-
-### Key Files
-
-- **Root-Level Tool Interface**: A Pydantic model that parent graphs use to interact with the tool
-- **Config Files**: Tool configuration, capabilities, and metadata
-- **UI Components**: Connection points for parent graphs to communicate with the tool
-- **Tool Implementations**: Actual functionality the tool provides
 
 ## Tool Registry System
 
-The Tool Registry provides a simple, file-based system for discovering, loading, and managing tools.
+The Tool Registry provides a simple, file-based system for discovering, loading, and managing tools.  Each level of graph will handle its own tools with it's own registry, keeping the levels cleanly separated and preventing overwhelming any one agent or level of the stack.
 
 ### Tool Configuration
 
@@ -109,13 +170,231 @@ metadata:
 - Only persists necessary information (configs and metadata)
 - Tools themselves are dynamically imported when needed
 
+## Tool Installation Process
+
+Tools are installed by adding their entire folder structure to the appropriate sub_graphs directory. The system supports hierarchical tool installation, allowing each graph to manage its own set of tools.
+
+### Installation Levels
+
+1. **Orchestrator Level Tools**
+   - Location: `orchestrator/src/sub_graphs/`
+   - Example: `personal_assistant_agent/`
+   - These tools are directly available to the orchestrator
+   - Installation: Copy the entire tool folder into the orchestrator's sub_graphs directory
+   ```bash
+   # Example: Installing personal_assistant_agent
+   cp -r personal_assistant_agent/ orchestrator/src/sub_graphs/
+   ```
+
+2. **Sub-Graph Level Tools**
+   - Location: `orchestrator/src/sub_graphs/<parent_tool>/src/sub_graphs/`
+   - Example: `orchestrator/src/sub_graphs/personal_assistant_agent/src/sub_graphs/google_suite_email_agent/`
+   - These tools are available to their parent tool
+   - Installation: Copy the entire tool folder into the parent tool's sub_graphs directory
+   ```bash
+   # Example: Installing google_suite_email_agent into personal_assistant_agent
+   cp -r google_suite_email_agent/ orchestrator/src/sub_graphs/personal_assistant_agent/src/sub_graphs/
+   ```
+
+### Installation Process
+
+1. **Prepare the Tool**
+   - Ensure the tool follows the standard file structure
+   - Verify all required files are present
+   - Check tool_config.yaml is properly configured
+
+2. **Install the Tool**
+   - Copy the entire tool folder to the appropriate sub_graphs directory
+   - The tool registry will automatically discover the new tool
+   - The system will prompt for tool approval on next startup
+
+3. **Verify Installation**
+   - Check the tool appears in the tool registry
+   - Verify the tool is properly configured
+   - Test basic tool functionality
+
+### Directory Structure Example
+
+```
+orchestrator/
+└── src/
+    └── sub_graphs/
+        ├── personal_assistant_agent/
+        │   └── src/
+        │       └── sub_graphs/
+        │           ├── google_suite_email_agent/
+        │           ├── calendar_agent/
+        │           └── task_agent/
+        ├── research_agent/
+        │   └── src/
+        │       └── sub_graphs/
+        │           ├── web_search_agent/
+        │           └── document_analysis_agent/
+        └── other_tools/
+```
+
+### Important Notes
+
+1. **Tool Independence**
+   - Each tool is self-contained
+   - Tools can be moved between different parent graphs
+   - Tools maintain their own configuration and state
+
+2. **Security**
+   - Tools must be approved before use
+   - Each tool runs in its own context
+   - Tools can only access their designated resources
+
+3. **Maintenance**
+   - Tools can be updated by replacing their folder
+   - Configuration changes require tool restart
+   - State is preserved across updates
+
+4. **Troubleshooting**
+   - Check tool registry logs for installation issues
+   - Verify tool configuration is valid
+   - Ensure all dependencies are installed
+
+## Parent Graph Tool Node
+
+Each sub-graph must provide a standardized tool node for its parent graph to use. This node serves as the entry point for all parent graph interactions and ensures consistent communication patterns throughout the system.
+
+### Tool Node Structure
+
+The parent graph tool node is implemented as a Pydantic model in the root of the sub-graph:
+
+```python
+# personal_assistant_tool.py
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional
+
+class PersonalAssistantTool(BaseModel):
+    """Tool interface for parent graph to interact with personal assistant."""
+    
+    name: str = "personal_assistant"
+    description: str = "Handles personal tasks, emails, and calendar management"
+    version: str = "0.1.0"
+    
+    # Tool-specific configuration
+    config: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "default_email": "user@example.com",
+            "max_retries": 3,
+            "timeout_seconds": 30
+        }
+    )
+    
+    # Required capabilities
+    capabilities: list[str] = ["email", "calendar", "tasks"]
+    
+    async def execute(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a tool request from the parent graph.
+        
+        Args:
+            request: The request from the parent graph containing:
+                - request_id: Unique identifier for this request
+                - parent_request_id: ID of the parent request
+                - action: The action to perform
+                - parameters: Tool-specific parameters
+                
+        Returns:
+            Dict containing:
+                - request_id: Echo of the request ID
+                - parent_request_id: Echo of the parent request ID
+                - status: success|partial|failure
+                - data: Tool-specific response data
+                - metadata: Additional context
+        """
+        # Implementation specific to personal assistant
+        pass
+```
+
+### Tool Node Requirements
+
+1. **Standard Interface**
+   - Must implement a Pydantic model
+   - Must provide name, description, and version
+   - Must implement execute() method
+   - Must handle request_id and parent_request_id
+
+2. **Configuration**
+   - Must support tool-specific configuration
+   - Must declare required capabilities
+   - Must validate input parameters
+   - Must handle errors gracefully
+
+3. **Communication**
+   - Must use standardized message format
+   - Must maintain request chain tracking
+   - Must provide status updates
+   - Must handle async operations
+
+4. **Error Handling**
+   - Must catch and report errors
+   - Must provide meaningful error messages
+   - Must support retry strategies
+   - Must maintain error context
+
+### Example Usage
+
+```python
+# In parent graph
+async def handle_user_request(request: Dict[str, Any]):
+    # Create tool instance
+    tool = PersonalAssistantTool()
+    
+    # Execute tool
+    response = await tool.execute({
+        "request_id": "uuid-123",
+        "parent_request_id": "uuid-456",
+        "action": "send_email",
+        "parameters": {
+            "to": "user@example.com",
+            "subject": "Test Email",
+            "body": "Hello from the tool!"
+        }
+    })
+    
+    # Handle response
+    if response["status"] == "success":
+        # Process successful response
+        pass
+    else:
+        # Handle error
+        pass
+```
+
+### Benefits
+
+1. **Clean Abstraction**
+   - Parent graphs only need to know the tool interface
+   - Implementation details are hidden
+   - Changes to tool internals don't affect parent
+
+2. **Consistent Communication**
+   - Standardized message format
+   - Predictable error handling
+   - Clear status reporting
+
+3. **Easy Integration**
+   - Simple to add new tools
+   - Clear interface requirements
+   - Well-documented patterns
+
+4. **Maintainable Code**
+   - Clear separation of concerns
+   - Standardized error handling
+   - Consistent patterns
+
 ## Standard Message Format
 
 Tools use standardized message formats for communication:
-- This needs work.  It does not match the messaging format of the orchestrator.
 
 ```python
 {
+    "request_id": "uuid",  # Unique identifier for the request chain
+    "parent_request_id": "uuid",  # ID of parent request if this is a sub-request
     "status": "success",
     "message": "Human-readable response",
     "data": {
@@ -129,6 +408,8 @@ For specific message types:
 - **Tool Status Messages**:
   ```python
   {
+      "request_id": "uuid",
+      "parent_request_id": "uuid",  # Optional, for sub-requests
       "type": "status",
       "status": "acknowledged|running|completed|error",
       "tool_name": "tool_id",
@@ -141,6 +422,8 @@ For specific message types:
 - **Results/Completion**:
   ```python
   {
+      "request_id": "uuid",
+      "parent_request_id": "uuid",  # Optional, for sub-requests
       "type": "result",
       "status": "success|partial|failure",
       "data": {},  # Tool-specific result data
@@ -152,6 +435,8 @@ For specific message types:
 - **Error Messages**:
   ```python
   {
+      "request_id": "uuid",
+      "parent_request_id": "uuid",  # Optional, for sub-requests
       "type": "error",
       "error_code": "ERROR_TYPE",
       "message": "human readable error",
@@ -160,6 +445,33 @@ For specific message types:
       "retry_strategy": "retry_pattern"
   }
   ```
+
+### Request Tracking and Closure
+
+1. **Request ID Generation**:
+   - Each new request gets a unique UUID
+   - Sub-requests inherit parent_request_id
+   - Request IDs are used for tracking and correlation
+
+2. **Request Lifecycle**:
+   - Creation: When a new request is initiated
+   - Propagation: Through the tool chain
+   - Completion: When the request is fulfilled
+   - Closure: When all sub-requests are complete
+
+3. **State Management**:
+   - Requests are tracked in the state manager
+   - Sub-requests are linked to parent requests
+   - State is persisted for request recovery
+   - Request history is maintained for auditing
+
+4. **Request Closure Rules**:
+   - A request is considered complete when:
+     - All sub-requests are complete
+     - The main task is fulfilled
+     - Any cleanup is performed
+   - Closure is logged and persisted
+   - Parent requests are notified of completion
 
 ## Using Tools in the Orchestrator
 
@@ -184,156 +496,82 @@ Tools can use other tools, creating a hierarchical structure:
 
 When a user installs a tool like personal_assistant, the orchestrator automatically knows to route all communications, social media, task, and calendar requests to it. If the tool is removed, that capability is no longer available.
 
-## Implementation Checklist (Outline Format)
+## RAG and Message Search Capabilities
 
-I. Inventory: What to Review
-    A. All files in any `personal_assistant` folders
-        1. [x] Main: `src/sub_graphs/personal_assistant_agent/`
-        2. [x] Tests: `tests/test_personal_assistant_agent.py`
-        3. [x] Old refs: `src/sub_graph_personal_assistant` (commented out)
-    B. All files in `src/config/`
-        1. [x] `nodes_and_tools_config.yaml`: Lists enabled tools
-        2. [x] `user_config.py`: Contains tool configuration
-    C. Any tool registration, tool processor, or orchestrator logic that references tools
-        1. [x] `src/tools/orchestrator_tools.py`
-        2. [x] `src/tools/initialize_tools.py`
-        3. [x] `src/tools/graph_integration.py`
-        4. [x] (Direct references: nodes_and_tools_config.yaml, user_config.py, graph_integration.py, initialize_tools.py, orchestrator_tools.py)
+The system includes built-in RAG (Retrieval Augmented Generation) capabilities for searching through message history:
 
-II. Implementing the First Tool (`personal_assistant`)
+1. **Vector Search**
+   - Messages are automatically embedded using the LLM service
+   - Embeddings are stored in the `embedding_nomic` column
+   - Supports semantic search across all messages
+   - Respects user-level privacy through filtering
 
-    A. Directory Structure & Consolidation
-        1. [x] Create proper directory structure in `src/sub_graphs/personal_assistant_agent/`
-        2. [x] Move existing files to correct locations
-            a. [x] Tool agent main directory with key files
-            b. [x] Nested `src` directory with standard folder structure
-        3. [x] Clean up any duplicates or stubs during move
-        4. [x] Update imports to reflect new structure
-        5. [x] Verify no files are left in incorrect locations
+2. **Search Methods**
+   ```python
+   # Basic text search
+   messages = await message_service.search_messages(
+       query="search term",
+       user_id="user123"
+   )
+   
+   # Semantic search with filters
+   messages = await db_service.semantic_message_search(
+       query_text="search term",
+       embedding=query_embedding,
+       user_id="user123",
+       match_count=5,
+       match_threshold=0.7
+   )
+   ```
 
-    B. Clean Up Orchestrator Tool References
-        1. [x] Review and update tool references in `nodes_and_tools_config.yaml`
-        2. [x] Update tool references in `user_config.py`
-        3. [x] Clean up tool imports and references in `graph_integration.py`
-        4. [x] Refactor `initialize_tools.py` to use dynamic tool discovery
-        5. [x] Update `orchestrator_tools.py` to use tool registry instead of direct imports
+3. **Privacy and Access Control**
+   - All searches are filtered by user_id
+   - Messages are only accessible to authorized users
+   - Line-level security is enforced through user_id filtering
 
-    C. Create Standardized Tool Interface
-        1. [x] Create basic tool configuration in `src/sub_graphs/personal_assistant_agent/src/config/tool_config.yaml`
-        2. [x] Create simple tool handler in `src/sub_graphs/personal_assistant_agent/src/tools/personal_assistant_tool.py`
-        3. [x] Build consistent agent-to-tool communication interface
-            a. [x] Create a standard Pydantic model at the root level that functions as the tool interface for the 'parent' graph
-            b. [x] Move CLI message passing interface components to appropriate locations
-                i. [x] Move sub_graph_interface.py to the CLI folder
-                ii. [x] Ensure agent implementation is in sub-graph/src/agents/
-                iii. [x] Confirm tool implementation is in sub-graph/src/tools/
-            c. [x] Implement simple message passing with standardized format
+4. **Integration with LLM**
+   - LLM can use RAG to find relevant context
+   - Supports cross-conversation reference
+   - Maintains conversation history for context
 
-IIb. CLI and Orchestrator Integration with Tool Registry (missed in above list)
-    Note: These steps are required before further testing, as the previous test failed due to missing CLI integration.
+### Using RAG in Tools
 
-    A. Patch CLI to use the tool registry for tool listing
-        1. [x] Add 'tools' and 'list tools' commands to CLI to display available/approved tools from the registry
-        2. [n] (Optional) Add CLI command to invoke a tool directly by name and task
-    B. Review orchestrator entrypoint and agent logic to ensure all tool listing/invocation uses the registry, not hardcoded lists
-        1. [x] Confirm orchestrator agent uses registry for tool discovery and invocation
-        2. [x] (Optional) Add/expand tests to ensure CLI and orchestrator use the registry and tool listing is DRY
-    C. Check the cannonical tool interface
-        1. [x] Ensure it is personal_assistant_tool.py, not personal_assistant_api.py
-        2. [x] Ensure it is importable and implements the required interface
-    D. Check test code
-        1. [x]  Ensure it imports and uses the tool via the registry, not by direct import.
-        2. [x]  Ensure it is using personal_assistant_tool.py, not personal_assistant_api.py
-        3. [x]  Tests should validate that the orchestrator and cli use the registry
-        4. [x]  Tests should validate that the tool can be discovered, loaded, and called.
+Tools can leverage RAG capabilities by:
+1. Using `message_service.search_messages()` for basic text search
+2. Using `db_service.semantic_message_search()` for semantic search
+3. Implementing custom search logic using the vector search capabilities
 
-    F. Orchestrator Tool Call Flow
-        1. [x] Ensure orchestrator injects tool prompt info and parses/executes tool calls in responses
-        2. [x] Ensure orchestrator logs and persists user, system, assistant, and tool messages
-        3. [x] Ensure orchestrator handles tool call results, errors, and propagates them to the user
-        4. [ ] (Move this step after sub-graph implementation) Ensure orchestrator can handle tool hierarchies (e.g., personal_assistant calling sub-tools)
-            - [ ] Complete after first sub-graph is functional and integrated
-        5. [ ] (Removed as standalone; see checklist intro note)
-        6. [ ] Add the logic for the orchestrator to evaluate tool replies against the original user request.
-        7. [ ] Add the logic for the llm to request additional information if an answer is not complete.
-
-    E. Tool Interface and Importability
-        1. [x] Ensure the canonical tool interface is personal_assistant_tool.py, not personal_assistant_api.py.
-        2. [x] Ensure the tool interface is importable and implements the required async execute method.
-        3. [x] Add a test that imports the tool via the registry and checks for the correct interface.
-
-II continued
-    D. Test Core Functionality
-        1. [ ] Test tool discovery and registration
-            a. [x] Verify orchestrator can discover personal_assistant_agent through registry
-            b. [x] Confirm configuration is properly loaded
-            c. [ ] Test tool approval workflow (auto and manual)
-        2. [x] Test minimal communication path
-            a. [x] Test basic message routing from orchestrator to tool
-            b. [x] Verify simple responses return correctly
-            c. [x] Confirm standard message format is maintained
-        3. [x] Validate modular structure
-            a. [x] Confirm orchestrator is unaware of tool implementation details
-            b. [x] Verify tool can respond without full implementation
-            c. [x] Test that tool interface abstracts underlying complexity
-
-    E. Expand Implementation
-        1. [ ] Complete file structure standardization
-            a. [ ] Finalize root-level Pydantic tool interface
-            b. [ ] Organize configuration files properly
-            c. [ ] Set up proper UI connection points
-        2. [ ] Implement state management
-            a. [ ] Add proper state persistence
-            b. [ ] Implement conversation history tracking
-            c. [ ] Test state restoration after restart
-        3. [ ] Add error handling and logging
-            a. [ ] Implement standardized error responses
-            b. [ ] Set up comprehensive logging
-            c. [ ] Test recovery from various failure scenarios
-        4. [ ] Validate communications
-            a. [ ] Confim that the tool passes messages to the sub-graph in the proper json format.
-            b. [ ] Try to finalize list of standard messages to pass.  Base on MCP, but modify as needed due to state message efficiency vs. stand-alone complete tool. 
-
-    F. Implement Minimal Real Functionality
-        1. [ ] Add one simple but real capability to personal_assistant
-            a. [ ] Implement basic task list functionality directly in the tool
-            b. [ ] Add task creation, reading, and basic management features
-            c. [ ] Focus on minimal viable implementation
-            d. [ ] Test end-to-end flow with real data
-
-    G. Expand to Multiple Tools
-        1. [ ] Duplicate structure for Librarian agent
-            a. [ ] Copy standard file structure from personal_assistant
-            b. [ ] Implement one simple search capability
-            c. [ ] Verify discovery and communication work identically
-        2. [ ] Test dynamic loading/unloading
-            a. [ ] Test removing and adding tools at runtime
-            b. [ ] Verify correct behavior when tools are unavailable
-            c. [ ] Test multiple tools working together
-
-    H. Natural Tool Integration
-        1. [ ] Implement natural language tool routing
-            a. [ ] Create prompts for orchestrator to recognize tool needs
-            b. [ ] Implement standard patterns for tool invocation
-            c. [ ] Test with various user requests
-
-    I. Transition to Sub-Agent Structure
-        1. [ ] Remove direct task list implementation from personal_assistant
-        2. [ ] Create separate task_agent with standard structure
-            a. [ ] Implement task functionality in this dedicated agent
-            b. [ ] Configure personal_assistant to use task_agent as a sub-tool
-        3. [ ] Add email_agent as another sub-tool
-            a. [ ] Implement basic email functionality
-            b. [ ] Configure personal_assistant to route email requests appropriately
-        4. [ ] Verify hierarchical routing works correctly
-            a. [ ] Test that orchestrator → personal_assistant → task_agent path works
-            b. [ ] Confirm orchestrator remains unaware of sub-agent details
-            c. [ ] Verify personal_assistant correctly abstracts its sub-tools
-
-# Discovered During Work
-- [ ] Ensure all sender/target values in logging use the <graph_name>.<node> format for all agents and sub-graphs
-- [ ] Confirm all tool completions are logged and embedded correctly after async fix
-- [ ] Review and refactor any remaining legacy API or UI-named files
+Example tool implementation:
+```python
+async def search_related_messages(
+    query: str,
+    user_id: str,
+    match_count: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Search for messages related to the query.
+    
+    Args:
+        query: Search query
+        user_id: User ID for privacy filtering
+        match_count: Number of matches to return
+        
+    Returns:
+        List of related messages
+    """
+    # Get query embedding
+    embedding = await llm_service.get_embedding(query)
+    
+    # Perform semantic search
+    results = await db_service.semantic_message_search(
+        query_text=query,
+        embedding=embedding,
+        user_id=user_id,
+        match_count=match_count
+    )
+    
+    return results
+```
 
 ## Graph Communication Paradigm
 
@@ -343,214 +581,291 @@ All communications between graphs will come down through tools, and be handled b
 - `cli_interface.py`: Enables direct terminal-based interface for stand-alone tool/graph deployment
 
 Initial development will use the sub_graph paradigm with message passing, leveraging all existing orchestrator infrastructure.
-==================
 
+# Orchestrator-Specific Documentation
 
+## What Makes the Orchestrator Unique
+1. **Core Functionality**
+   - LLM configs: conversation Y, reasoning N, tools Y, encoding Y
+   - Database configs: sql Y, vector Y, state N, knowledge_graph N
+   - System prompt complexity
+   - Tool routing logic
 
-# Key File Mapping: Orchestrator vs. Personal Assistant Agent (One per line)
-- Format: Orchestrator (src/)  -->  Personal Assistant Agent (sub_graphs/personal_assistant_agent/src/)
-- File review checklist:
-  - In master (orchestrator), is the code "as simple as possible, but no simpler?"
-  - In master, is the code zen?
-  - In master, is there graph-function specific code (i.e. orchestrator_only) that could be moved to another file to make a cleaner master template?
+2. **Configuration Requirements**
+   - Conversation config/hooks
+   - Personality config (if using conversation)
+   - LLM configuration options
+   - Database configuration options
+   - State management options
+   - Logging configuration
+   - User configuration for line-level security
+
+3. **Configuration Inheritance Options**
+   - Use parent configuration
+   - Use local configuration
+   - Use remote configuration
+   - Hybrid approach with fallbacks
+
+## Current Issues
+1. Google Authentication Failures
+   - [ ] Fix Google auth in personal assistant
+   - [ ] Verify auth flow in tool chain
+   - [ ] Test auth persistence
+   - [ ] Document auth requirements
+
+2. Message Flow Issues
+   - [ ] Fix message routing through personal assistant
+   - [ ] Verify LLM connection in personal assistant
+   - [ ] Test message persistence
+   - [ ] Document message flow
+
+3. Tool Integration Issues
+   - [ ] Fix dummy email tool integration
+   - [ ] Verify tool discovery
+   - [ ] Test tool execution
+   - [ ] Document tool requirements
+
+# Template-Specific Documentation
+
+## What Every Graph Needs (Generic/Template)
+- graph_name: Unique name for the graph/agent (from config)
+- system_prompt: Default system prompt (from config)
+- llm_config: How to access LLM (parent, local, remote)
+- db_config: How to access DB (parent, local, remote)
+- state_config: State management (parent, local, stand-alone)
+- logging_config: Logging level, file, etc.
+- user_config: User/role/line-level security (parent/local)
+
+## Implementation Plan
+1. Expand graph_config.py to include all generic config fields (with docstrings)
+2. Move orchestrator-specific fields to a subclass or a separate config (if needed)
+3. Update the orchestrator's graph file to use the new config structure
+4. Do the same for personal_assistant and other agents
+
+## File Review Checklist
+- In master (orchestrator), is the code "as simple as possible, but no simpler?"
+- In master, is the code zen?
+- In master, is there graph-function specific code (i.e. orchestrator_only) that could be moved to another file to make a cleaner master template?
 - After satisfactory review, create a clean template file for template_agent
 - In personal_assistant_agent, is there graph-function specific code (i.e. personal_assistant_only) that could be moved to another file to make a cleaner match to the template?
 - Update to proper file names and reference names for the personal_assistant_agent (variable name?)
 
+# Rapid Development Path
 
-agents/orchestrator_agent.py
-    --> agents/personal_assistant_agent.py
-    1. Simplicity & Zen
-    Simplicity: The class is focused: it coordinates user requests, LLM chat, and tool calls. No unnecessary logic.
-    Zen: Clear separation of concerns. Tool logic is delegated, not embedded. Personality is optional and modular.
-    2. Graph-Function Specific Code
-    orchestrator_only:
-    The use of self.graph_name and logging with orchestrator-specific sender/target is graph-specific.
-    The prompt includes orchestrator-specific context (time, location, system prompt).
-    Tool call routing is generic, but the logging and naming are orchestrator-centric.
-    What could be moved to a template?
-    The base agent logic (history, prompt creation, LLM query) is generic and could be in a template.
-    The tool call extraction and async handling are also generic and could be abstracted.
-    The only truly orchestrator-specific parts are the default names, logging sender/target, and maybe the system prompt.
-    3. Modularity
-    The agent is modular: personality, tool logic, and LLM are all pluggable.
-    Stubs for future tool/personality logic are present but commented out.
-    4. What to Template?
-    The following could be moved to a template agent:
-    The async message processing pattern (with tool call detection and async execution).
-    The conversation history and prompt creation logic.
-    The logging pattern, with sender/target as variables.
-    The structure for optional personality injection.
-    The template should use generic names (e.g., self.graph_name, self.agent_name) and allow subclasses to override context, system prompt, and logging details.
-    Conclusion:
-    This file is a good candidate for a master template. The only orchestrator-specific code is in naming and logging. The rest is generic and can be parameterized for sub-graph agents.
-    Next step suggestion:
-    Extract a generic version of this class for template_agent, replacing orchestrator-specific names with placeholders or variables.
-    Add a dummy tool call handler for template testing.
+### Phase 0: Quick Start Tools and Templates
+1. [ ] Create Basic Template
+   - [ ] Extract minimal working template from orchestrator
+   - [ ] Create template_agent with basic structure
+   - [ ] Document template usage and customization
+   - [ ] Add example tool implementation
 
+2. [ ] Implement First Test Tool
+   - [ ] Create simple email tool for personal_assistant
+   - [ ] Implement basic message passing
+   - [ ] Add minimal error handling
+   - [ ] Test basic functionality
 
+3. [ ] Document Known Risks
+   - [ ] List potential core changes that would affect tools
+   - [ ] Document workarounds for current limitations
+   - [ ] Create migration guide for future updates
+   - [ ] Add version compatibility notes
 
-config/graph_config.py (created)
-    --> config/personal_assistant_config.py renamed to graph_config.py
+### Known Risks and Limitations
+1. **Core Changes That May Affect Tools**
+   - Request ID system changes
+   - Message format updates
+   - Configuration inheritance modifications
+   - State management changes
+   - LLM integration updates
 
-  working notes
-      What make the orchestrator unique? goes in graph_config.py
+2. **Current Workarounds**
+   - Use simple UUID for request tracking
+   - Implement basic message validation
+   - Use local configuration only
+   - Minimal state persistence
+   - Basic error handling
 
-      LLM configs - conversation Y, reasoning N, tools Y, encoding Y
+3. **Future Migration Needs**
+   - Update request ID handling
+   - Migrate to new message formats
+   - Implement configuration inheritance
+   - Enhance state management
+   - Add advanced error handling
 
-      Database configs - sql Y, vector Y, state N, knowledge_graph N
+# Implementation Planning and Checklist
 
-      conversation Y,
-      personality Y,
+## Critical Design Decisions and Discussions
 
-      System prompt.
+### 1. Request ID and Message Flow (CRITICAL)
+- [ ] Design request ID inheritance system
+  - [ ] Review current UUID implementation
+  - [ ] Evaluate options for additional IDs (metadata vs separate tracking)
+  - [ ] Design parent/child request relationship
+  - [ ] Document request chain tracking approach
+  - [ ] Related to: File Review I.A, Message Format V.A
 
-      What do all tool agent graphs have?
+### 2. Message Format Standardization (CRITICAL)
+- [ ] Define message format requirements
+  - [ ] CLI to JSON format transition
+  - [ ] Message validation rules
+  - [ ] Error handling standards
+  - [ ] Status reporting format
+  - [ ] Related to: Message Format V, Documentation Updates VII
 
-      conversation_config or hooks
-          personality_config (only if using conversation_config)
+### 3. Configuration Inheritance (CRITICAL)
+- [ ] Define configuration inheritance strategy
+  - [ ] LLM config inheritance (parent/local/remote)
+  - [ ] DB config inheritance (parent/local/remote)
+  - [ ] State management (parent/local/standalone)
+  - [ ] User config inheritance for line-level security
+  - [ ] Logging config inheritance
+  - [ ] Related to: File Review I.B, Configuration Updates VII
 
-      LLM - options are use parent, use local (ollama in our case), or use remote (openrouter.ai) goes in llm_config.py
+### 4. RAG Implementation (CRITICAL)
+- [ ] Design RAG integration
+  - [ ] Search method implementation
+  - [ ] Privacy controls
+  - [ ] Cross-conversation reference handling
+  - [ ] Related to: RAG Awareness II.B
 
-      Database - options are use parent, use local (supabase in our case), or use remote (supabase web) do we need graph_config.py?
+### 5. LLM Integration and Selection (IMPORTANT)
+- [ ] Design LLM selection and configuration system
+  - [ ] Graph-level vs global selection
+  - [ ] Task-specific LLM support
+  - [ ] Configuration inheritance rules
+  - [ ] LLM evaluation for request closure
+  - [ ] Related to: LLM Integration VI, Technical Debt VIII.E
 
-      State - tie into parent, tie into local functions, or stand alone (i.e. MCP)
+### 6. Multi-Personality System (DEFERRED)
+- [ ] Design personality system
+  - [ ] Personality configuration structure
+  - [ ] Switching mechanism
+  - [ ] State management per personality
+  - [ ] Documentation requirements
+  - [ ] Related to: Deferred Items I
 
-      Logging config seems unique to me, including db schema.  what do we do with this?
-          
-      User_config, use parent, or use local  (need this for line level security)
+## Implementation Paths
 
-graphs/orchestrator_graph.py
-    --> graphs/personal_assistant_graph.py
+### Path A: Rapid Development (After Critical Decisions)
+1. [ ] Create Basic Template
+   - [ ] Extract minimal working template from orchestrator
+   - [ ] Create template_agent with basic structure
+   - [ ] Document template usage and customization
+   - [ ] Add example tool implementation
 
-tools/orchestrator_tools.py
-    --> tools/personal_assistant_tool.py
+2. [ ] Implement First Test Tool
+   - [ ] Create simple email tool for personal_assistant
+   - [ ] Implement basic message passing
+   - [ ] Add minimal error handling
+   - [ ] Test basic functionality
 
-tools/initialize_tools.py
-    --> tools/personal_assistant_tool.py (init logic inside class)
+3. [ ] Document Known Risks
+   - [ ] List potential core changes that would affect tools
+   - [ ] Document workarounds for current limitations
+   - [ ] Create migration guide for future updates
+   - [ ] Add version compatibility notes
 
-config/user_config.py
-    --> config/tool_config.yaml
+### Known Risks and Limitations
+1. **Core Changes That May Affect Tools**
+   - Request ID system changes
+   - Message format updates
+   - Configuration inheritance modifications
+   - State management changes
+   - LLM integration updates
 
-config/nodes_and_tools_config.yaml
-    --> config/config.py
+2. **Current Workarounds**
+   - Use simple UUID for request tracking
+   - Implement basic message validation
+   - Use local configuration only
+   - Minimal state persistence
+   - Basic error handling
 
-state/state_manager.py
-    --> state/ (if present, or uses orchestrator's)
+3. **Future Migration Needs**
+   - Update request ID handling
+   - Migrate to new message formats
+   - Implement configuration inheritance
+   - Enhance state management
+   - Add advanced error handling
 
-state/state_models.py
-    --> state/ (if present, or uses orchestrator's)
+### Path B: Full Implementation
+1. [ ] Request ID System
+   - [ ] Implement UUID handling
+   - [ ] Add parent request tracking
+   - [ ] Update state management
+   - [ ] Add to database schema
 
-managers/db_manager.py
-    --> managers/ (if present, or uses orchestrator's)
+2. [ ] Message Format Implementation
+   - [ ] Implement JSON message format
+   - [ ] Add CLI compatibility layer
+   - [ ] Update documentation
+   - [ ] Add validation
 
-managers/session_manager.py
-    --> managers/ (if present, or uses orchestrator's)
+3. [ ] RAG Integration
+   - [ ] Add search methods to base agent
+   - [ ] Update system prompts
+   - [ ] Add examples
+   - [ ] Test functionality
 
-services/llm_service.py
-    --> services/ (if present, or uses orchestrator's)
+4. [ ] Configuration System
+   - [ ] Implement inheritance system
+   - [ ] Add configuration validation
+   - [ ] Update documentation
+   - [ ] Test inheritance
 
-services/message_service.py
-    --> services/ (if present, or uses orchestrator's)
+5. [ ] State Management
+   - [ ] Implement state persistence
+   - [ ] Add request tracking
+   - [ ] Update documentation
+   - [ ] Test state handling
 
-tools/tool_utils.py
-    --> tools/ (if present, or uses orchestrator's)
+6. [ ] LLM Selection System
+   - [ ] Add LLM configuration
+   - [ ] Implement selection logic
+   - [ ] Add switching capability
+   - [ ] Update documentation
 
-tools/graph_integration.py
-    --> tools/ (if present, or uses orchestrator's)
+7. [ ] Multi-Personality System
+   - [ ] Implement personality configuration
+   - [ ] Add switching capability
+   - [ ] Update state management
+   - [ ] Add documentation
 
-ui/cli.py
-    --> cli/sub_graph_interface.py
+8. [ ] Advanced Features
+   - [ ] Add advanced error handling
+   - [ ] Implement retry strategies
+   - [ ] Add monitoring
+   - [ ] Update documentation
 
-ui/base_interface.py
-    --> ui/ (if present)
+9. [ ] Testing
+   - [ ] Add unit tests
+   - [ ] Add integration tests
+   - [ ] Add performance tests
+   - [ ] Update test documentation
 
-tests/test_orchestrator_tools.py
-    --> tests/test_personal_assistant.py
+10. [ ] Documentation
+    - [ ] Update API documentation
+    - [ ] Add usage examples
+    - [ ] Update configuration guide
+    - [ ] Add troubleshooting guide
 
-# For any file not present in the sub-graph, the orchestrator's version is used by default.
-# As sub-graphs mature, they should implement their own versions as needed for modularity.
+11. [ ] Maintenance and Optimization
+    - [ ] Code Review
+    - [ ] Review message passing code
+    - [ ] Check request ID handling
+    - [ ] Verify error handling
+    - [ ] Update tests
 
+    - [ ] Performance Optimization
+    - [ ] Profile critical paths
+    - [ ] Optimize message handling
+    - [ ] Improve state management
+    - [ ] Update documentation
 
-
-
-1. What Every Graph Needs (Generic/Template)
-graph_name: Unique name for the graph/agent (from config).
-system_prompt: Default system prompt (from config).
-llm_config: How to access LLM (parent, local, remote).
-db_config: How to access DB (parent, local, remote).
-state_config: State management (parent, local, stand-alone).
-logging_config: Logging level, file, etc.
-user_config: User/role/line-level security (parent/local).
-tool_registry_config: How to discover/approve tools.  --NO.  Tool registry is a core function of all the graphs.
-These should be in a generic config class (e.g., GraphConfig), with sensible defaults and the ability to override via env or file.  -- That was my thought, but is this getting too complex?  Perhaps different sections in the same config file?  .i.e. does this graph use this feature?  How is this graph configured to use it?
-2. What Makes the Orchestrator Unique
-Role: Only the orchestrator talks to the user directly.  -- How is this different than the prompt?
-Personality: May inject personality into prompts.
-Sub-graph Coordination: Assigns tasks to sub-graphs/tools.  -- Again, core function of all graphs.
-Conversation Management: Maintains user-facing conversation state.  -- Not needed.  If it uses conversation, it must use conversation state and persistant memory.  Perhaps add these requirements as a note to the conversation config.
-System prompt: More complex, may include instructions for tool/agent routing.  -- Agreed, and I missed this, good catch.
-These should be in orchestrator-specific config fields or a subclass (e.g., OrchestratorConfig(GraphConfig)). -- Yes, see above comment for tool registry
-3. What Makes a Tool Agent Graph Unique
-Specialized tool configs (e.g., Gmail, Calendar, etc.).  --  No, all of these are tool agent graphs.
-Sub-tool registry: May have its own sub-graph/tool registry.  -- Already part of the program, or explain to me why it is not.
-No direct user conversation (unless acting as a stand-alone agent).  -- No, congured above
-These should be in agent-specific config fields or a subclass (e.g., PersonalAssistantConfig(GraphConfig)).
-4. Implementation Plan
-Step 1: Expand graph_config.py to include all generic config fields (with docstrings).  Great point for doc strings.
-Step 2: Move orchestrator-specific fields to a subclass or a separate config (if needed).
-Step 3: Update the orchestrator’s graph file to use the new config structure.
-Step 4: Do the same for personal_assistant and other agents. -- That is this whole excercise.  
-
-
-
-
-
-uuid will not handle . appended uuids in the database.  If a message has a request_id, it much move that to metadata as parent request_id, and if it is going to the parent as a response, it should close it's local request and request_id and replace it with the parent request id.
-
-
-
-Wrap on Monday 5/6/2025
-We are failing to call the dummy email tool
-We are failing to authorize anything with google
-We are not logging transactions through the personal assistant
-We just got the failed to encode error AGAIN
-
-We were adjusting the settings and it was ratholing so we tried to return to testing messages between graphs.  Somewhat successful but with kluge files
-We are not sending our messages to or from the UI, rather directly through the personal assistant graph
-We I do not believe we are sending the messages to the personal assistant graph llm connection
-
-
-
-
-
-
-
-Multi-Personality Config Migration Checklist
-[ ] Update YAML Structure
-Add a personality: section with:
-default_personality: valet
-personalities: dictionary, one entry per agent/personality.
-Example:
-Apply to user_config....
-[ ] Move Existing Personality Configs to YAML
-For each agent/personality, move their config from Python or other files into the YAML under personalities:.
-[ ] Update/Refactor Agent Loading Logic
-Ensure agent/personality selection uses get_personality_config(name, ...) from personality_config.py.
-When switching personalities (e.g., “Let me speak with the personal assistant”), pass the correct name to the loader.
-[ ] Session/State Management
-Ensure each personality/agent can have its own session state (e.g., conversation history, context).
-Store session state keyed by both personality_name and session_id if needed.
-[ ] Update Documentation
-Document the new YAML structure and how to add/edit personalities.
-Add usage examples for switching personalities and listing available personalities.
-[ ] Test Backward Compatibility
-Verify that a single-personality config (old style) still works.
-[ ] (Optional) Add CLI/Tooling
-Add a script or CLI command to list available personalities and show their config.
-File/Location Reference:
-YAML: config/developer_user_config.yaml
-Loader: src/config/personality_config.py
-Agent/session logic: wherever you manage agent state/switching
+    - [ ] Security Review
+    - [ ] Review authentication
+    - [ ] Check authorization
+    - [ ] Verify privacy controls
+    - [ ] Update security docs
 
 
