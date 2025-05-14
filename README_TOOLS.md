@@ -660,11 +660,11 @@ Initial development will use the sub_graph paradigm with message passing, levera
 ## I. Critical Discussion and Decisions
 These must be discussed and answered before any code is written. They are the foundation of the project and establish our task order.
 
-### A. Request ID and Message Flow (CRITICAL)
+### A. [x] Request ID and Message Flow (CRITICAL)
 1. Questions and concerns
-   a. [ ] How to handle request ID inheritance across multiple levels?
-   b. [ ] How to maintain context through async operations?
-   c. [ ] How to track parent-child relationships?
+   a. [x] How to handle request ID inheritance across multiple levels?
+   b. [x] How to maintain context through async operations?
+   c. [x] How to track parent-child relationships?
 
 2. Decisions
    a. [x] Design request ID inheritance system
@@ -675,11 +675,11 @@ These must be discussed and answered before any code is written. They are the fo
    f. [x] Related to: File Review I.A, Message Format V.A
 
 3. Benefits:
-   a. Clean separation of concerns
-   b. Easy to track request flow
-   c. Maintains context through async operations
-   d. Simple to implement and understand
-   e. Follows standard patterns used in distributed systems
+   - Clean separation of concerns
+   - Easy to track request flow
+   - Maintains context through async operations
+   - Simple to implement and understand
+   - Follows standard patterns used in distributed systems
 
 4. Key Advantages:
    a. [x] Each level only needs to know about its own request_id
@@ -697,154 +697,303 @@ These must be discussed and answered before any code is written. They are the fo
 
 6. Related to: File Review I.A, Message Format V.A
 
-### B. Message Format Standardization (CRITICAL)
+### B. [x] Message Format Standardization (CRITICAL)
 1. Questions and concerns
-   a. [ ] How to standardize messages between CLI and LLM?
-   b. [ ] How to handle validation and error reporting?
-   c. [ ] How to maintain backward compatibility?
+   a. [x] How to standardize messages between graph levels?
+   b. [x] How to handle validation and error reporting across levels?
+   c. [x] How to maintain backward compatibility?
+   d. [x] How to handle status tracking consistently?
+   e. [x] How to manage message type inheritance?
+   f. [x] How to separate graph-level from tool-level messages?
+   g. [x] How to handle message routing between levels?
 
 2. Current Implementation:
-   a. The CLI interface (src/ui/cli/interface.py) uses a MessageFormat class from base_interface.py for standardizing messages
-   b. Messages are passed through several layers:
-      - CLI Interface → Orchestrator Agent → Tools
-   c. Each layer has its own message format handling
+   - The CLI interface (src/ui/cli/interface.py) uses a MessageFormat class from base_interface.py
+   - Messages flow through multiple layers:
+     - CLI Interface → Orchestrator Graph → Tool Graphs → Sub-Tool Graphs
+   - Each layer has its own message format handling
+   - Message formats are defined in multiple places
+   - Formats vary between graph levels
+   - Fields are duplicated across different message types
 
 3. Issues Found:
-   a. Inconsistent message formats between layers
-   b. Some direct string passing instead of structured JSON
-   c. Mixed usage of simple dictionaries and MessageFormat objects
-   d. Tool responses not fully standardized
+   - Inconsistent message formats between graph levels
+   - Mixed usage of simple dictionaries and MessageFormat objects
+   - Tool responses not fully standardized
+   - Redundant message creation methods for each type
+   - Common fields (request_id, timestamp) repeated in each type
+   - Error handling scattered across different message types
+   - Inconsistent status handling (status vs type fields)
+   - Progress tracking only in status updates
+   - No clear separation between graph-level and tool-level messages
 
 4. Specific Problems:
-   a. orchestrator_agent.py sometimes returns simple {"response": message} instead of proper MessageFormat
-   b. Tool results are formatted differently from regular messages
-   c. CLI display handles multiple message formats
-   d. No clear validation of message structure between layers
+   - orchestrator_agent.py sometimes returns simple {"response": message} instead of proper MessageFormat
+   - Tool results are formatted differently from regular messages
+   - CLI display handles multiple message formats
+   - No clear validation of message structure between levels
+   - Status tracking varies between message types
+   - Error handling lacks consistency across types
+   - Progress updates are not standardized
+   - Graph-level messages mixed with tool-level messages
 
 5. Difficulty to Fix:
-   a. Complexity: Medium
-   b. Risk: Low (mostly additive changes)
-   c. Effort: Moderate (need to update multiple files)
+   - Complexity: Medium
+   - Risk: Low (mostly additive changes)
+   - Effort: Moderate (need to update multiple files)
+   - Impact: High (affects all message-based communication)
 
 6. Decisions
-   a. [x] Define message format requirements
-   b. [x] CLI to JSON format transition
-   c. [x] Message validation rules
-   d. [x] Error handling standards
-   e. [x] Status reporting format
-   f. [x] Related to: Message Format V, Documentation Updates VII
+   a. [x] Implement unified message format for all communications
+   b. [x] Use Pydantic for validation and type safety
+   c. [x] Maintain simple request tracking through parent_request_id
+   d. [x] Standardize validation and error handling
+   e. [x] Implement consistent status tracking
+   f. [x] Keep message structure as simple as possible
+   g. [x] Related to: Message Format V, Documentation Updates VII
 
 7. Benefits:
-   a. Consistent message handling across all components
-   b. Clear validation rules
-   c. Standardized error handling
-   d. Predictable status reporting
-   e. Improved debugging and error tracking
-   f. Better integration with monitoring tools
+   - Single, consistent message format for all communications
+   - Clear request tracking through parent_request_id
+   - Standardized validation and error handling
+   - Predictable status reporting
+   - Improved debugging and error tracking
+   - Better integration with monitoring tools
+   - Reduced code duplication
+   - Unified status tracking
+   - Consistent error handling
 
 8. Key Advantages:
-   a. Single source of truth for message structure
-   b. Easy to validate and process messages
-   c. Clear error handling patterns
-   d. Consistent status updates
-   e. Simplified tool integration
-   f. Better error tracking and debugging
+   - Simpler implementation and maintenance
+   - Clear message flow through the graph
+   - Easy to validate and process messages
+   - Clear error handling patterns
+   - Consistent status updates
+   - Simplified tool integration
+   - Better error tracking and debugging
+   - Reduced maintenance overhead
+   - Improved type safety
+   - Better IDE support
 
-9. Implementation Tasks:
-   a. Core Message Format Implementation
-      - [ ] Update src/ui/base_interface.py with new MessageFormat class
-      - [ ] Add message validation methods
-      - [ ] Add error handling methods
-      - [ ] Add status reporting methods
-      - [ ] Add message type enums
-
-   b. Interface Updates
-      - [ ] Update src/ui/cli/interface.py
-      - [ ] Update src/ui/cli/display.py
-      - [ ] Update src/ui/cli/commands.py
-      - [ ] Update src/ui/cli/tool_handler.py
-      - [ ] Update src/ui/cli/session_handler.py
-
-   c. Agent Updates
-      - [ ] Update src/agents/orchestrator_agent.py
-      - [ ] Update src/agents/base_agent.py
-      - [ ] Update src/agents/llm_query_agent.py
-      - [ ] Update src/agents/personality_agent.py
-
-   d. Tool Updates
-      - [ ] Update src/tools/orchestrator_tools.py
-      - [ ] Update tool execution flow
-      - [ ] Update tool response format
-      - [ ] Update error handling
-
-   e. State Management Updates
-      - [ ] Update src/state/state_models.py
-      - [ ] Update src/state/state_manager.py
-      - [ ] Update src/state/state_validator.py
-      - [ ] Update src/state/state_errors.py
-
-   f. Service Updates
-      - [ ] Update src/services/message_service.py
-      - [ ] Update src/services/logging_service.py
-      - [ ] Update src/services/llm_service.py
-
-   g. Testing
-      - [ ] Add unit tests for MessageFormat
-      - [ ] Add integration tests for message flow
-      - [ ] Add validation tests
-      - [ ] Add error handling tests
-      - [ ] Add status reporting tests
-
-   h. Documentation
-      - [ ] Update message format documentation
-      - [ ] Add validation rules documentation
-      - [ ] Add error handling documentation
-      - [ ] Add status reporting documentation
+9. Implementation Intent:
+   - Create unified message format
+   - Add validation and error handling
+   - Add status reporting
+   - Update all interfaces to use new format
+   - Add comprehensive testing
+   - Update documentation
+   - Create message factory
+   - Standardize status tracking
+   - Implement consistent error handling
 
 10. Testing and Validation
-    - [ ] Test message flow through all components
+    - [ ] Test message flow through all levels
     - [ ] Verify error handling
     - [ ] Validate status reporting
     - [ ] Check backward compatibility
+    - [ ] Test message type inheritance
+    - [ ] Verify status tracking
+    - [ ] Validate error handling consistency
+    - [ ] Test message routing between levels
 
-### C. Services Source Configuration (CRITICAL)
+### C. [x] Services Source Configuration (CRITICAL)
 1. Questions and concerns
-   a. [ ] How to handle service inheritance?
-   b. [ ] How to manage service lifecycle?
-   c. [ ] How to handle remote services?
+   a. [x] How to handle service inheritance?
+   b. [x] How to manage service configuration at graph level?
+   c. [ ] How to handle remote services? (DEFERRED)
+   d. [x] How to share messaging code between graphs?
+   e. [x] How to share state management code between graphs?
 
 2. Key Discussion Points:
    ```
-   # Key Insight: Service Source vs Service Offering
-   - Service source (local/remote/parent) and service offering (serve) are different concerns
-   - This separation helps avoid unnecessary message passing overhead while maintaining flexibility
-   - Each graph only needs to know about its parent's services, not its children
-   - Service source and offering are independent decisions
+   # Key Insight: Service Configuration vs Service Implementation
+   - Service configuration (local/parent) and service implementation (LLM/DB/Logging) are separate concerns
+   - Top-level graph must use local services
+   - Sub-graphs can use either local or parent services
+   - Service implementation details (remote/local) can be handled by the service nodes
+   - Messaging code should be shared to maintain DRY principles
+   - State management code should be shared to maintain consistency
+   - This separation allows for flexible service configuration while maintaining clean graph structure
    - Services are managed at the graph level through BaseGraphServices
-   - Clear separation of concerns between service configuration and service management
+   - Clear separation between service configuration and service implementation
    ```
 
 3. Implementation Approach:
    ```
    # Implementation Strategy
-   - Separate service source (LOCAL/REMOTE/PARENT) from service offering (NONE/SERVE)
-   - Make it a base graph feature through BaseGraphServices
-   - Keep each graph focused only on its own services and parent relationship
-   - Use a dictionary-based service configuration for flexibility
-   - Code lives in base graph functionality, making it available to all graphs
-   - Maintains clean separation of concerns
+   - Top-level graph configuration:
+     * Must use local services
+     * Can serve as parent for sub-graphs
+     * Handles service initialization
+   
+   - Sub-graph configuration:
+     * Can use local or parent services
+     * Inherits parent service configuration by default
+     * Can override with local configuration
+   
+   - Service implementation:
+     * Defer remote service handling to service nodes
+     * Allow for multiple service sources in future
+     * Keep service implementation details encapsulated
+   
+   - Shared code:
+     * Messaging:
+       - Share common message handling code
+       - Maintain consistent message format
+       - Use inheritance for graph-specific needs
+     * State:
+       - Share state management code
+       - Maintain consistent state structure
+       - Use inheritance for graph-specific state
+   
+   - Configuration system:
+     * Simple local/parent choice
+     * Future-proof for additional options
+     * Clear inheritance rules
    ```
 
 4. Decisions
    a. [x] Define configuration inheritance strategy
-   b. [x] LLM config inheritance (parent/local/remote)
-   c. [x] DB config inheritance (parent/local/remote)
+   b. [x] LLM config inheritance (parent/local)
+   c. [x] DB config inheritance (parent/local)
    d. [x] State management (parent/local/standalone)
    e. [x] User config inheritance for line-level security
    f. [x] Logging config inheritance
-   g. [x] Related to: File Review I.B, Configuration Updates VII
+   g. [x] Share messaging code between graphs
+   h. [x] Share state management code between graphs
+   i. [x] Related to: File Review I.B, Configuration Updates VII, Message Format V.A, State Management III.C
 
-### D. RAG Implementation (CRITICAL)
+5. Benefits:
+   - Clear service configuration inheritance
+   - Flexible service implementation
+   - Simple graph-level configuration
+   - Maintainable code structure
+   - Future-proof for remote services
+   - DRY messaging code
+   - DRY state management code
+   - Clear hierarchy of service access
+   - Consistent state handling
+
+6. Key Advantages:
+   - Each graph only needs to know about its own services
+   - Service implementation details are encapsulated
+   - Easy to add new service types
+   - Clear configuration inheritance
+   - Simple to understand and maintain
+   - Shared messaging code reduces duplication
+   - Shared state code ensures consistency
+   - Flexible service source options
+
+7. Implementation Notes:
+   - Complexity: Low
+   - Risk: Low
+   - Time Estimate: 1-2 days
+   - Dependencies: None
+   - Testing Required: Medium
+
+8. Related to: File Review I.B, Configuration Updates VII, Message Format V.A, State Management III.C
+
+### D. [ ] Central Decision Making and State Evaluation (CRITICAL)
+1. Questions and concerns
+   a. [ ] How to feed tool responses back to LLM for evaluation?
+   b. [ ] How to provide context about other requests and history?
+   c. [ ] How to structure the decision-making process?
+   d. [ ] How to handle multi-step decision chains?
+   e. [ ] How to maintain conversation context?
+   f. [ ] How to integrate with RAG for historical context?
+   g. [ ] How to handle state queries during decision making?
+
+2. Key Discussion Points:
+   ```
+   # Key Insight: Decision Making vs Information Retrieval
+   - Central node needs to evaluate tool responses and make decisions
+   - LLM needs access to:
+     * Current request state and history
+     * Related request states
+     * Conversation history
+     * Tool execution history
+     * System state information
+   - Decision process needs to be:
+     * Structured and repeatable
+     * Context-aware
+     * State-aware
+     * History-aware
+   - Clear separation between:
+     * Decision making logic
+     * State access patterns
+     * Information retrieval
+     * Context management
+   ```
+
+3. Implementation Approach:
+   ```
+   # Implementation Strategy
+   - Decision Making Process:
+     * Central node evaluates tool responses
+     * LLM makes decisions based on:
+       - Tool response content
+       - Current state
+       - Historical context
+       - Related requests
+     * Clear decision points and criteria
+     * Structured decision documentation
+   
+   - State Access:
+     * Direct database queries for current state
+     * RAG for historical context
+     * Cached state for performance
+     * Clear state access patterns
+   
+   - Context Management:
+     * Maintain conversation context
+     * Track decision chains
+     * Link related requests
+     * Document decision rationale
+   
+   - Integration Points:
+     * Tool response evaluation
+     * State query handling
+     * History retrieval
+     * Decision documentation
+   ```
+
+4. Decisions
+   a. [ ] Define decision-making process
+   b. [ ] Design state access patterns
+   c. [ ] Structure context management
+   d. [ ] Implement decision documentation
+   e. [ ] Create state query interface
+   f. [ ] Design history integration
+   g. [ ] Related to: RAG Implementation I.E, State Management III.C
+
+5. Benefits:
+   - Clear decision-making process
+   - Comprehensive state awareness
+   - Rich historical context
+   - Documented decisions
+   - Structured evaluation
+   - Better error handling
+   - Improved debugging
+
+6. Key Advantages:
+   - Centralized decision making
+   - Consistent state access
+   - Clear context management
+   - Documented rationale
+   - Better error tracking
+   - Improved maintainability
+   - Enhanced debugging
+
+7. Implementation Notes:
+   - Complexity: High
+   - Risk: Medium
+   - Time Estimate: 3-4 days
+   - Dependencies: State Management, RAG
+   - Testing Required: High
+
+8. Related to: RAG Implementation I.E, State Management III.C, Message Format V.A
+
+### E. [ ] RAG Implementation (Part of memory and knowledge representation)
 1. Questions and concerns
    a. [ ] How to integrate RAG with existing message flow?
    b. [ ] How to handle vector storage?
@@ -869,7 +1018,7 @@ These must be discussed and answered before any code is written. They are the fo
 
 6. Related to: RAG Awareness II.B
 
-### E. LLM Integration and Selection (IMPORTANT)
+### F. LLM Integration and Selection (IMPORTANT)
 1. Questions and concerns
    a. [ ] How to handle multiple LLM providers?
    b. [ ] How to manage model selection?
@@ -895,7 +1044,7 @@ These must be discussed and answered before any code is written. They are the fo
 
 6. Related to: LLM Integration VI, Technical Debt VIII.E
 
-### F. Multi-Personality System (DEFERRED)
+### G. Multi-Personality System (DEFERRED)
 1. Questions and concerns
    a. [ ] How to manage personality switching?
    b. [ ] How to maintain context across personalities?
@@ -915,30 +1064,163 @@ These must be discussed and answered before any code is written. They are the fo
 
 6. Related to: Deferred Items I
 
-### G. Graph Database - Memories Mem0 Server (TBD)
-
-### H. State Management (CRITICAL)
+### H. [ ] Graph Memory and Knowledge Representation (CRITICAL)
 1. Questions and concerns
-   a. [ ] How to integrate with existing state management?
-   b. [ ] How to handle synchronization?
-   c. [ ] How to manage access control?
+   a. [ ] How to integrate graph memory with decision making?
+   b. [ ] How to structure knowledge representation?
+   c. [ ] How to handle relationship tracking?
+   d. [ ] How to manage memory persistence?
+   e. [ ] How to integrate with RAG and vector search?
+   f. [ ] How to handle memory updates and versioning?
+   g. [ ] How to manage memory access patterns?
+
+2. Key Discussion Points:
+   ```
+   # Key Insight: Memory as a Core System Component
+   - Graph memory is not just storage, but a fundamental system capability
+   - Memory needs to support:
+     * Knowledge representation
+     * Relationship tracking
+     * Temporal awareness
+     * Context management
+     * Decision support
+   - Integration points:
+     * Decision making process
+     * State management
+     * RAG system
+     * Tool execution
+     * User interaction
+   - Memory operations:
+     * Knowledge creation
+     * Relationship mapping
+     * Context retrieval
+     * Pattern recognition
+     * Temporal tracking
+   ```
+
+3. Implementation Approach:
+   ```
+   # Implementation Strategy
+   - Core Memory Structure:
+     * Graph-based knowledge representation
+     * Relationship tracking
+     * Temporal versioning
+     * Context management
+     * Access patterns
+   
+   - Integration Points:
+     * Decision Making:
+       - Provide context for decisions
+       - Track decision history
+       - Map related decisions
+     * State Management:
+       - Link state to knowledge
+       - Track state evolution
+       - Map state relationships
+     * RAG System:
+       - Enhance vector search
+       - Provide relationship context
+       - Support temporal queries
+   
+   - Memory Operations:
+     * Knowledge Creation:
+       - Structured knowledge entry
+       - Relationship mapping
+       - Context association
+     * Memory Retrieval:
+       - Pattern matching
+       - Relationship traversal
+       - Context reconstruction
+     * Memory Updates:
+       - Version control
+       - Conflict resolution
+       - Consistency maintenance
+   ```
+
+4. Decisions
+   a. [ ] Define memory structure
+   b. [ ] Design relationship model
+   c. [ ] Implement versioning system
+   d. [ ] Create access patterns
+   e. [ ] Design integration points
+   f. [ ] Plan memory operations
+   g. [ ] Related to: Central Decision Making I.D, RAG Implementation I.E, State Management III.C
+
+5. Benefits:
+   - Rich knowledge representation
+   - Relationship awareness
+   - Temporal understanding
+   - Context preservation
+   - Pattern recognition
+   - Decision support
+   - Knowledge evolution
+
+6. Key Advantages:
+   - Structured knowledge
+   - Relationship tracking
+   - Temporal awareness
+   - Context management
+   - Pattern recognition
+   - Decision support
+   - Knowledge evolution
+
+7. Implementation Notes:
+   - Complexity: High
+   - Risk: Medium
+   - Time Estimate: 4-5 days
+   - Dependencies: Decision Making, RAG, State Management
+   - Testing Required: High
+
+8. Related to: Central Decision Making I.D, RAG Implementation I.E, State Management III.C
+
+### I. [x] State Management (CRITICAL)
+1. Questions and concerns
+   a. [x] How to integrate with existing state management?
+   b. [x] How to handle synchronization?
+   c. [x] How to manage access control?
+   d. [x] How to handle state persistence?
+   e. [x] How to manage state validation?
+   f. [x] How to handle state transitions?
+   g. [x] How to manage state inheritance?
 
 2. Decisions
-   a. [ ] TBD
+   a. [x] Implement unified state model using Pydantic:
+      - Base state model for all graphs
+      - Message state model for communication
+      - Tool state model for tool-specific state
+   b. [x] Create enhanced state manager:
+      - Centralized state management
+      - Validation before updates
+      - Consistent persistence
+      - Clear error handling
+   c. [x] Use LangGraph's StateGraph for orchestration
+   d. [x] Implement clear state interfaces
+   e. [x] Add comprehensive logging and error handling
 
 3. Benefits:
-   a. [ ] TBD
+   a. [x] Better type safety with Pydantic models
+   b. [x] Clearer validation rules
+   - [x] Easier state persistence
+   - [x] Better error handling
+   - [x] More maintainable code structure
 
 4. Key Advantages:
-   a. [ ] TBD
+   a. [x] Each component can be modified independently
+   b. [x] Easier to add new state features
+   c. [x] Better error isolation and debugging
+   d. [x] Clearer responsibility boundaries
+   e. [x] More maintainable codebase
 
 5. Implementation Notes:
-   a. [ ] TBD
+   a. [x] Complexity: Medium
+   b. [x] Risk: Low (mostly additive changes)
+   c. [x] Time Estimate: 2-3 days
+   d. [x] Dependencies: None
+   e. [x] Testing Required: High
 
 6. Related to: State Management III.C
 
-
-    I Service configuration
+### J. Service Configuration
         - [ ] Define configuration inheritance strategy
         - [ ] LLM config inheritance (parent/local/remote)
         - [ ] DB config inheritance (parent/local/remote)
@@ -947,20 +1229,62 @@ These must be discussed and answered before any code is written. They are the fo
         - [ ] Logging config inheritance
         - [ ] Related to: File Review I.B, Configuration Updates VII
 
+### K. [x] Tool Registry Concerns
+Based on the codebase search, I can see that the tool registry system is currently implemented in src/tools/registry/tool_registry.py and has several responsibilities mixed together. Let's separate these concerns into distinct modules while keeping them in the existing structure.
+
+1. Questions and Concerns
+   a. [x] How to separate discovery, validation, and state management?
+   b. [x] How to maintain backward compatibility during refactor?
+   c. [x] How to handle tool initialization and lifecycle?
+   d. [x] How to manage tool dependencies and conflicts?
+   e. [x] How to handle tool versioning and updates?
+
+2. Decisions
+   a. [x] Split registry into distinct modules:
+      - Discovery: Finding and loading tools
+      - Validation: Config and capability validation
+      - State: Persistence and state management
+   b. [x] Keep existing file structure but reorganize internally
+   c. [x] Use Pydantic for validation and type safety
+   d. [x] Implement clear interfaces between components
+   e. [x] Add comprehensive logging and error handling
+
+3. Benefits:
+   a. [x] Better separation of concerns
+   - [x] Improved testability
+   - [x] Easier maintenance and updates
+   - [x] Clearer error handling
+   - [x] Better type safety and validation
+
+4. Key Advantages:
+   a. [x] Each component can be modified independently
+   b. [x] Easier to add new features to specific components
+   c. [x] Better error isolation and debugging
+   d. [x] Clearer responsibility boundaries
+   e. [x] More maintainable codebase
+
+5. Implementation Notes:
+   a. [x] Complexity: Medium
+   b. [x] Risk: Low (mostly additive changes)
+   c. [x] Time Estimate: 2-3 days
+   d. [x] Dependencies: None
+   e. [x] Testing Required: High
+
+6. Related to: Tool Registry VII
+
 ## II. Housekeeping and Foundation Edits
 Core features needed for MVP. High risk changes with high return.
 
-### A. [ ] File Review and Cleanup
+### A. File Review and Cleanup
    - [ ] Review orchestrator_agent.py as template
    - [ ] Clean up legacy files
    - [ ] Update imports and references
 
-### B. [ ] Directory Structure Standardization
+### B. Directory Structure Standardization
    - [ ] Review proper directory structure
    - [ ] Verify file locations
    - [ ] Check for duplicates
    - [ ] Validate imports
-
 
 ### C. Request ID and Message Flow Implementation
     1. [ ] Core Implementation
@@ -1062,97 +1386,93 @@ Core features needed for MVP. High risk changes with high return.
         ```
 
 ### D. RAG Implementation
-
    - [ ] Add search methods to base agent
    - [ ] Update system prompts
    - [ ] Add examples
    - [ ] Test functionality
 
 ### E. Message Format Standardization Implementation
+- This is potentially a huge change.  AI discussion suggested there were issues.  
     1. [ ] Core Message Format
     ```python
-    class MessageFormat:
-   ```python
-   class MessageFormat:
-       """Standard message format for all system communications."""
-       
-       @staticmethod
-       def create_request(
-           method: str,
-           params: Dict[str, Any],
-           request_id: Optional[str] = None,
-           parent_request_id: Optional[str] = None
-       ) -> Dict[str, Any]:
-           """Create a standardized request message."""
-           return {
-               "request_id": request_id or str(uuid.uuid4()),
-               "parent_request_id": parent_request_id,
-               "type": "request",
-               "method": method,
-               "params": params,
-               "timestamp": datetime.now().isoformat()
-           }
-       
-       @staticmethod
-       def create_response(
-           request_id: str,
-           result: Dict[str, Any],
-           status: str = "success",
-           metadata: Optional[Dict[str, Any]] = None
-       ) -> Dict[str, Any]:
-           """Create a standardized response message."""
-           return {
-               "request_id": request_id,
-               "type": "response",
-               "status": status,
-               "result": result,
-               "metadata": metadata or {},
-               "timestamp": datetime.now().isoformat()
-           }
-       
-       @staticmethod
-       def create_error(
-           request_id: str,
-           error_code: str,
-           message: str,
-           details: Optional[Dict[str, Any]] = None
-       ) -> Dict[str, Any]:
-           """Create a standardized error message."""
-           return {
-               "request_id": request_id,
-               "type": "error",
-               "status": "error",
-               "error": {
-                   "code": error_code,
-                   "message": message,
-                   "details": details or {}
-               },
-               "timestamp": datetime.now().isoformat()
-           }
-       
-       @staticmethod
-       def create_status_update(
-           request_id: str,
-           status: str,
-           progress: Optional[float] = None,
-           message: Optional[str] = None
-       ) -> Dict[str, Any]:
-           """Create a standardized status update message."""
-           return {
-               "request_id": request_id,
-               "type": "status",
-               "status": status,
-               "progress": progress,
-               "message": message,
-               "timestamp": datetime.now().isoformat()
-           }
+   from enum import Enum
+   from typing import Optional, Dict, Any
+   from datetime import datetime
+   from uuid import uuid4
+   from pydantic import BaseModel, Field
+
+   class MessageType(str, Enum):
+       """Types of messages in the system."""
+       REQUEST = "request"
+       RESPONSE = "response"
+       ERROR = "error"
+       STATUS = "status"
+
+   class MessageStatus(str, Enum):
+       """Status values for messages."""
+       PENDING = "pending"
+       RUNNING = "running"
+       SUCCESS = "success"
+       PARTIAL = "partial"
+       ERROR = "error"
+       COMPLETED = "completed"
+
+   class Message(BaseModel):
+       """Unified message structure for all communications."""
+       request_id: str = Field(default_factory=lambda: str(uuid4()))
+       parent_request_id: Optional[str] = None
+       type: MessageType
+       status: MessageStatus
+       timestamp: datetime = Field(default_factory=datetime.now)
+       content: str
+       data: Dict[str, Any] = Field(default_factory=dict)
+       metadata: Dict[str, Any] = Field(default_factory=dict)
+
+       def create_child_message(self, content: str, data: Dict[str, Any] = None) -> 'Message':
+           """Create a child message for sub-requests."""
+           return Message(
+               parent_request_id=self.request_id,
+               type=self.type,
+               status=MessageStatus.PENDING,
+               content=content,
+               data=data or {},
+               metadata=self.metadata
+           )
    ```
 
-### F. Services Source Configuration Implementation
-1. [ ] Service Configuration
+2. [ ] Implementation Tasks
+   a. Core Message Format Implementation
+      - [ ] Create message base class
+      - [ ] Implement message validation
+      - [ ] Add message serialization/deserialization
+      - [ ] Create message factory
+      - [ ] Add message persistence
+
+   b. Message Handling Implementation
+      - [ ] Create message handlers
+      - [ ] Implement message validation
+      - [ ] Add error handling
+      - [ ] Create message factory
+      - [ ] Add message persistence
+
+   c. Testing
+      - [ ] Add unit tests for message class
+      - [ ] Add validation tests
+      - [ ] Add serialization tests
+      - [ ] Add integration tests
+      - [ ] Add error handling tests
+
+   d. Documentation
+      - [ ] Update message format documentation
+      - [ ] Add validation rules
+      - [ ] Add usage examples
+      - [ ] Add migration guide
+
+### F. Service Configuration Implementation
+1. [ ] Core Service Configuration
 ```python
 from enum import Enum
-from typing import Optional, Dict, Any, List
+   from typing import Optional, Dict, Any
 from pydantic import BaseModel
 
 class ServiceSource(str, Enum):
@@ -1167,27 +1487,17 @@ class ServiceOffering(str, Enum):
     SERVE = "serve"      # Offer service to children
 
 class ServiceConfig(BaseModel):
-    """Base configuration for any service (LLM, DB, Logging, etc)."""
+       """Base configuration for any service."""
     source: ServiceSource = ServiceSource.LOCAL
     offering: ServiceOffering = ServiceOffering.NONE
     url: Optional[str] = None  # For remote services
     config: Dict[str, Any] = {}  # Service-specific config
 
-class LLMServiceConfig(ServiceConfig):
-    """LLM service configuration."""
-    model: str = "default"
-    temperature: float = 0.7
-    max_tokens: int = 2000
-
-class DBServiceConfig(ServiceConfig):
-    """Database service configuration."""
-    provider: str = "sqlite"
-    database: str = "default.db"
-
-class LoggingServiceConfig(ServiceConfig):
-    """Logging service configuration."""
-    level: str = "INFO"
-    format: str = "standard"
+   class ServiceInstance:
+       """Represents a service instance with its configuration."""
+       def __init__(self, config: ServiceConfig, instance: Any):
+           self.config = config
+           self.instance = instance
 ```
 
 2. [ ] Service Management
@@ -1197,62 +1507,262 @@ class BaseGraphServices:
     def __init__(self, config: Dict[str, ServiceConfig], parent_services: Optional['BaseGraphServices'] = None):
         self.config = config
         self.parent_services = parent_services
-        self._service_instances = {}
-        self._offered_services = {}
+           self._services: Dict[str, ServiceInstance] = {}
+           self._offered_services: Dict[str, ServiceInstance] = {}
 
     async def get_service(self, service_name: str) -> Any:
         """Get service instance based on configuration."""
-        if service_name not in self._service_instances:
+           if service_name not in self._services:
             service_config = self.config[service_name]
             
             if service_config.source == ServiceSource.PARENT and self.parent_services:
                 # Use parent's service
-                self._service_instances[service_name] = await self.parent_services.get_service(service_name)
-            elif service_config.source == ServiceSource.REMOTE:
-                # Create remote connection
-                self._service_instances[service_name] = await self._create_remote_service(service_name)
+                   self._services[service_name] = await self.parent_services.get_service(service_name)
             else:
-                # Create local service
-                self._service_instances[service_name] = await self._create_local_service(service_name)
+                   # Create new service instance
+                   instance = await self._create_service(service_name, service_config)
+                   self._services[service_name] = ServiceInstance(service_config, instance)
 
             # If this graph offers the service, store it
             if service_config.offering == ServiceOffering.SERVE:
-                self._offered_services[service_name] = self._service_instances[service_name]
+                   self._offered_services[service_name] = self._services[service_name]
 
-        return self._service_instances[service_name]
+           return self._services[service_name].instance
 
-    async def _create_remote_service(self, service_name: str) -> Any:
+       async def _create_service(self, service_name: str, config: ServiceConfig) -> Any:
+           """Create service instance based on configuration."""
+           if config.source == ServiceSource.REMOTE:
+               return await self._create_remote_service(service_name, config)
+           return await self._create_local_service(service_name, config)
+
+       async def _create_remote_service(self, service_name: str, config: ServiceConfig) -> Any:
         """Create connection to remote service."""
         # Implementation depends on service type
         pass
 
-    async def _create_local_service(self, service_name: str) -> Any:
+       async def _create_local_service(self, service_name: str, config: ServiceConfig) -> Any:
         """Create local service instance."""
         # Implementation depends on service type
         pass
 
-    def get_offered_services(self) -> Dict[str, Any]:
+       def get_offered_services(self) -> Dict[str, ServiceInstance]:
         """Get services this graph offers to children."""
         return self._offered_services
-```
 
+       def is_service_offered(self, service_name: str) -> bool:
+           """Check if a service is offered to children."""
+           return service_name in self._offered_services
+```
 
 3. [ ] Graph Configuration
    ```python
    class GraphConfig(BaseModel):
-       """Graph-level configuration with service management."""
+       """Graph-level configuration."""
        name: str
        services: Dict[str, ServiceConfig] = Field(default_factory=dict)
 
        def initialize_services(self, parent_services: Optional[BaseGraphServices] = None) -> BaseGraphServices:
            """Initialize service management."""
            return BaseGraphServices(self.services, parent_services)
+
+       def add_service(self, name: str, config: ServiceConfig) -> None:
+           """Add a service configuration."""
+           self.services[name] = config
+
+       def remove_service(self, name: str) -> None:
+           """Remove a service configuration."""
+           if name in self.services:
+               del self.services[name]
    ```
+
+4. [ ] Service Usage Example
+   ```python
+   # In orchestrator (top-level graph)
+   orchestrator_config = GraphConfig(name="orchestrator")
+   orchestrator_config.add_service("llm", ServiceConfig(
+       source=ServiceSource.LOCAL,
+       offering=ServiceOffering.SERVE,  # Offer to children
+       config={"model": "gpt-4"}
+   ))
+   orchestrator_services = orchestrator_config.initialize_services()
+
+   # In personal assistant (child graph)
+   pa_config = GraphConfig(name="personal_assistant")
+   pa_config.add_service("llm", ServiceConfig(
+       source=ServiceSource.PARENT  # Use parent's LLM service
+   ))
+   pa_config.add_service("email", ServiceConfig(
+       source=ServiceSource.LOCAL,
+       offering=ServiceOffering.NONE,  # Don't offer email service
+       config={"provider": "gmail"}
+   ))
+   pa_services = pa_config.initialize_services(orchestrator_services)
+   ```
+
+### G. Tool Registry Implementation
+1. [ ] Discovery Module (`src/tools/registry/discovery.py`)
+   ```python
+   """Tool discovery module for finding and loading tools."""
+
+   from pathlib import Path
+   import importlib
+   import logging
+   from typing import List, Dict, Any
+
+   logger = logging.getLogger(__name__)
+
+   class ToolDiscovery:
+       """Handles discovery and loading of tools."""
+       
+       def __init__(self, sub_graphs_dir: str = "src/sub_graphs"):
+           self.sub_graphs_dir = Path(sub_graphs_dir)
+           
+       async def discover_tools(self) -> List[Dict[str, Any]]:
+           """Find and load all tools in sub_graphs."""
+           if not self.sub_graphs_dir.exists():
+               logger.warning("sub_graphs directory not found")
+               return []
+               
+           discovered_tools = []
+           for tool_dir in self.sub_graphs_dir.glob("*_agent"):
+               if not tool_dir.is_dir():
+                   continue
+                   
+               tool_name = tool_dir.name.replace("_agent", "")
+               tool_info = await self._load_tool(tool_dir, tool_name)
+               if tool_info:
+                   discovered_tools.append(tool_info)
+                   
+           return discovered_tools
+           
+       async def _load_tool(self, tool_dir: Path, tool_name: str) -> Optional[Dict[str, Any]]:
+           """Load a single tool from its directory."""
+           # Implementation of tool loading logic
+           pass
+   ```
+
+2. [ ] Validation Module (`src/tools/registry/validation.py`)
+   ```python
+   """Tool validation module for validating tool configurations and capabilities."""
+
+   from typing import Dict, Any, Optional
+   from pydantic import BaseModel
+
+   class ToolValidation:
+       """Validates tool configurations and capabilities."""
+       
+       def validate_tool_config(self, config: Dict[str, Any]) -> bool:
+           """Validate a tool's configuration."""
+           # Implementation of config validation
+           pass
+           
+       def validate_tool_capabilities(self, capabilities: List[str]) -> bool:
+           """Validate a tool's capabilities."""
+           # Implementation of capabilities validation
+           pass
+           
+       def validate_tool_interface(self, tool_func: Any) -> bool:
+           """Validate a tool's interface."""
+           # Implementation of interface validation
+           pass
+   ```
+
+3. [ ] State Management Module (`src/tools/registry/state.py`)
+   ```python
+   """Tool state management module for persisting and loading tool state."""
+
+   from pathlib import Path
+   import json
+   from datetime import datetime
+   from typing import Dict, Any
+
+   class ToolStateManager:
+       """Manages tool state persistence and loading."""
+       
+       def __init__(self, data_dir: str = "src/data/tool_registry"):
+           self.data_dir = Path(data_dir)
+           self.data_dir.mkdir(parents=True, exist_ok=True)
+           
+       def persist_state(self, state: Dict[str, Any]) -> None:
+           """Save current state to data directory."""
+           state_file = self.data_dir / "tool_state.json"
+           with open(state_file, 'w') as f:
+               json.dump(state, f, indent=2)
+               
+       def load_state(self) -> Dict[str, Any]:
+           """Load previously persisted state."""
+           state_file = self.data_dir / "tool_state.json"
+           if not state_file.exists():
+               return {}
+               
+           with open(state_file) as f:
+               return json.load(f)
+   ```
+
+4. [ ] Updated Registry (`src/tools/registry/tool_registry.py`)
+   ```python
+   """Tool registry that coordinates discovery, validation, and state management."""
+
+   from typing import Dict, Any, Optional
+   from .discovery import ToolDiscovery
+   from .validation import ToolValidation
+   from .state import ToolStateManager
+
+   class ToolRegistry:
+       """Tool registry that coordinates tool management."""
+       
+       def __init__(self, data_dir: str = "src/data/tool_registry"):
+           self.tools: Dict[str, Any] = {}
+           self.tool_configs: Dict[str, dict] = {}
+           
+           # Initialize components
+           self.discovery = ToolDiscovery()
+           self.validation = ToolValidation()
+           self.state_manager = ToolStateManager(data_dir)
+           
+           # Load persisted state
+           self._load_persisted_state()
+           
+       async def discover_tools(self):
+           """Find and register all tools."""
+           discovered_tools = await self.discovery.discover_tools()
+           
+           for tool_info in discovered_tools:
+               if self.validation.validate_tool_config(tool_info["config"]):
+                   self.tools[tool_info["name"]] = tool_info["tool"]
+                   self.tool_configs[tool_info["name"]] = tool_info["config"]
+                   
+           self._persist_state()
+           
+       def _persist_state(self):
+           """Save current state."""
+           state = {
+               "last_updated": datetime.utcnow().isoformat(),
+               "configs": self.tool_configs
+           }
+           self.state_manager.persist_state(state)
+           
+       def _load_persisted_state(self):
+           """Load persisted state."""
+           state = self.state_manager.load_state()
+           self.tool_configs = state.get("configs", {})
+   ```
+
+5. [ ] Testing Updates
+   a. [ ] Update existing tests to use new structure
+   b. [ ] Add tests for each new module
+   c. [ ] Add integration tests
+   d. [ ] Add error handling tests
+   e. [ ] Add state persistence tests
+
+6. [ ] Documentation Updates
+   a. [ ] Update API documentation
+   b. [ ] Add module documentation
+   c. [ ] Add usage examples
+   d. [ ] Add migration guide
 
 ## III. Early Fast and High Risk Deployment
 Minimum functionality with templates. Initial tools with minimal effort.
-
-
 
 ### A. Document known risks
 [ ] Document Known Risks
@@ -1322,10 +1832,140 @@ Necessary changes before broad deployment. Medium/high risk changes.
 4. [ ] Test integration
 
 ### C. State Management
-1. [ ] Implement state persistence
-2. [ ] Add request tracking
-3. [ ] Update documentation
-4. [ ] Test state handling
+1. [ ] Unified State Model (`src/state/state_models.py`)
+   ```python
+   """State models for the application."""
+
+   from pydantic import BaseModel, Field
+   from typing import Dict, Any, Optional, List
+   from datetime import datetime
+
+   class Message(BaseModel):
+       """Base message structure."""
+       request_id: str
+       parent_request_id: Optional[str] = None
+       type: str
+       status: str
+       timestamp: datetime = Field(default_factory=datetime.now)
+       content: str
+       metadata: Dict[str, Any] = Field(default_factory=dict)
+
+   class GraphState(BaseModel):
+       """Unified state model using Pydantic."""
+       messages: List[Message] = Field(default_factory=list)
+       conversation_state: Dict[str, Any] = Field(default_factory=dict)
+       agent_states: Dict[str, Any] = Field(default_factory=dict)
+       current_task: Optional[str] = None
+       task_history: List[str] = Field(default_factory=list)
+       agent_results: Dict[str, Any] = Field(default_factory=dict)
+       final_result: Optional[str] = None
+
+       class Config:
+           arbitrary_types_allowed = True
+   ```
+
+2. [ ] Enhanced State Manager (`src/state/state_manager.py`)
+   ```python
+   """Enhanced state manager with validation and persistence."""
+
+   from typing import Dict, Any, Optional
+   from .state_models import GraphState, Message
+   from .state_validator import StateValidator
+
+   class StateManager:
+       """Enhanced state manager with validation and persistence."""
+       
+       def __init__(self, state: Optional[GraphState] = None):
+           self.state = state or GraphState()
+           self.validator = StateValidator()
+
+       async def update_state(self, update: Dict[str, Any]) -> GraphState:
+           """Update state with validation."""
+           # Validate update
+           self.validator.validate_update(update)
+           
+           # Apply update
+           for key, value in update.items():
+               if hasattr(self.state, key):
+                   setattr(self.state, key, value)
+           
+           # Persist state
+           await self._persist_state()
+           return self.state
+
+       async def add_message(self, message: Message) -> None:
+           """Add message to state with validation."""
+           self.state.messages.append(message)
+           await self._persist_state()
+
+       async def _persist_state(self) -> None:
+           """Persist state to storage."""
+           # Implementation depends on storage backend
+           pass
+   ```
+
+3. [ ] State Validator (`src/state/state_validator.py`)
+   ```python
+   """State validation module."""
+
+   from typing import Dict, Any
+   from .state_models import GraphState, Message
+
+   class StateValidator:
+       """Validates state updates and transitions."""
+       
+       def validate_update(self, update: Dict[str, Any]) -> None:
+           """Validate a state update."""
+           # Implementation of update validation
+           pass
+           
+       def validate_message(self, message: Message) -> None:
+           """Validate a message."""
+           # Implementation of message validation
+           pass
+           
+       def validate_transition(self, current_state: GraphState, new_state: GraphState) -> None:
+           """Validate a state transition."""
+           # Implementation of transition validation
+           pass
+   ```
+
+4. [ ] State Exports (`src/state/state_exports.py`)
+   ```python
+   """State module exports and public API."""
+
+   from .state_models import (
+       Message,
+       GraphState
+   )
+
+   from .state_manager import (
+       StateManager
+   )
+
+   from .state_validator import StateValidator
+
+   __all__ = [
+       'Message',
+       'GraphState',
+       'StateManager',
+       'StateValidator'
+   ]
+   ```
+
+5. [ ] Testing Updates
+   a. [ ] Update existing tests to use new structure
+   b. [ ] Add tests for each new module
+   c. [ ] Add integration tests
+   d. [ ] Add error handling tests
+   e. [ ] Add state persistence tests
+
+6. [ ] Documentation Updates
+   a. [ ] Update API documentation
+   b. [ ] Add module documentation
+   c. [ ] Add usage examples
+   d. [ ] Add migration guide
+   e. [ ] Update README
 
 ## V. Standard Deployment
 Create standard deployment template and upgrade existing tools.

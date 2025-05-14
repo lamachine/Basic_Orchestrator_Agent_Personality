@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-05-11T21:15:49.550073",
+  "last_updated": "2025-05-14T23:39:39.894691",
   "configs": {
     "personal_assistant": {
       "name": "personal_assistant",
@@ -12,6 +12,15 @@
         "reminder_operations"
       ],
       "example": "User: 'Check my email'\nTool: personal_assistant\nMessage: 'check email'"
+    },
+    "template": {
+      "name": "template",
+      "description": "Template tool for running test tools in the sub-graph.\nThis tool acts as a bridge between the orchestrator and test tools within the sub-graph.\nThe sub-graph contains various test tools (like test_tool_1) that can be executed.\nThe orchestrator should send requests to the template tool with the user's request, \nand it will route them to the appropriate test tool within the sub-graph.",
+      "version": "1.0.0",
+      "capabilities": [
+        "run_test_tool"
+      ],
+      "example": "User: 'Run test tool 1'\nTool: template\nTask: run_test_tool\nParameters: {\n    \"tool_name\": \"template_tool\",\n    \"input\": \"run test\", \"run test tool 1\", \"run tool 2\"\n}"
     }
   }
 }

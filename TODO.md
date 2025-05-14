@@ -1205,3 +1205,8 @@ This approach keeps the separation between services and managers while clarifyin
 - [ ] Ensure all session state is consistent and persists as expected.
 - **Test Results:**
     - _Record test results and any issues found._
+
+
+
+
+ToDo, each package must have full services, managers and tools to stand alone, but must pull from parent if we want to inherit.  We have switched to full relative imports, but this will take some more thought.  
