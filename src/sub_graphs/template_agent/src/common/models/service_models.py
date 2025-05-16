@@ -5,7 +5,13 @@ This module provides models for service configuration and capabilities.
 """
 
 from typing import Dict, Any, Optional, List
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel, 
+    Field, 
+    field_validator, 
+    model_validator, 
+    validator
+)
 
 class ServiceCapability(BaseModel):
     """Model for service capabilities."""
