@@ -1,0 +1,26 @@
+# Google API dependencies
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
+# # Slack dependencies
+# slack-sdk
+
+# # Discord dependencies
+# discord.py
+
+# Database dependencies
+sqlalchemy
+psycopg2-binary
+alembic
+
+# Utility dependencies
+pydantic
+python-dotenv
+aiohttp
+tenacity
+mem0
+
+# Logging and monitoring
+structlog
+prometheus-client 

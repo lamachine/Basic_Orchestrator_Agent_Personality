@@ -1,0 +1,28 @@
+{
+  "version": "v1.1",
+  "vector_store": {
+    "provider": "supabase",
+    "config": {
+      "url": "${SUPABASE_URL}",
+      "key": "${SUPABASE_SERVICE_ROLE_KEY}",
+      "collection_name": "memories",
+      "embedding_model_dims": 768,
+      "embedding_model": "nomic-embed-text"
+    }
+  },
+  "graph_store": {
+    "provider": "neo4j",
+    "config": {
+      "url": "${NEO4J_URL}",
+      "username": "${NEO4J_USER}",
+      "password": "${NEO4J_PASSWORD}"
+    }
+  },
+  "key_value_store": {
+    "provider": "supabase",
+    "config": {
+      "url": "${SUPABASE_URL}",
+      "key": "${SUPABASE_ANON_KEY}"
+    }
+  }
+} 

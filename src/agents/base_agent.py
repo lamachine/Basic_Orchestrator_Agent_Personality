@@ -18,6 +18,10 @@ promotes code reuse, consistency, and modularity across the agent ecosystem.
 The architecture follows a composition pattern where specialized agents inherit from
 BaseAgent and add their domain-specific functionality, while the OrchestratorAgent
 coordinates their interactions in a flexible workflow.
+
+Required configs
+- LLM service config
+- 
 """
 
 import logging

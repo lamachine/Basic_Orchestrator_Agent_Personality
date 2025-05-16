@@ -7,6 +7,7 @@ pydantic
 pydantic-settings>=2.1.0
 pydantic-extra-types>=2.1.0
 langgraph
+mem0
 
 # Testing dependencies
 pytest

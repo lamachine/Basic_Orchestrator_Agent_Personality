@@ -1,0 +1,65 @@
+# Template Agent Configuration
+
+# Graph identification
+graph_name: template_graph
+system_prompt: |
+  You are a template agent that can be customized for specific tasks.
+  You have access to various tools and can coordinate with other agents.
+  All tool messages must be in JSON tool command format.
+
+# Core configurations (inherited from parent)
+# These will be overridden by parent graph settings if available
+llm:
+  api_url: http://localhost:11434
+  model: llama3.1
+
+db:
+  provider: parent  # Use parent graph's database
+
+state:
+  provider: parent  # Use parent graph's state management
+
+logging:
+  file_level: DEBUG
+  console_level: INFO
+  log_dir: logs
+
+user:
+  provider: parent  # Use parent graph's user management
+
+# Local service configurations
+api:
+  base_url: ""
+  timeout: 30
+  retry_count: 3
+
+# Service registry
+services: {}  # Add service configurations as needed
+
+# Parent graph settings
+parent_graph_name: orchestrator_graph
+
+# Local agent settings
+name: template_agent
+version: 1.0.0
+description: Template agent for tool execution
+
+# LLM settings (can be overridden by parent)
+llm_api_url: null  # Will be inherited from parent if not set
+llm_model: null    # Will be inherited from parent if not set
+
+# Tool settings
+tools_enabled: true
+tool_timeout: 30
+
+# Logging settings
+log_level: INFO
+enable_history: true
+max_history: 10
+
+# State management
+session_timeout: 3600
+cleanup_interval: 300
+
+# Parent graph settings (will be populated from parent)
+parent_graph_config: null 

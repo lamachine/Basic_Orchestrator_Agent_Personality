@@ -1,0 +1,19 @@
+{
+  "name": "basic_orchestrator_agent_personality",
+  "version": "1.0.0",
+  "description": "A modular orchestrator system for LLM agents with tool support.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mem0ai": "^2.1.25"
+  }
+}

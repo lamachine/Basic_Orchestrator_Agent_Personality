@@ -82,6 +82,15 @@ class MCPAdapter:
                 "postgres": {
                     "url": os.environ.get("POSTGRES_URL", "local"),
                     "capabilities": ["query"]
+                },
+                "context7": {
+                    "url": "https://context7.com/api/v1",
+                    "auth": {"api_key": os.environ.get("CONTEXT7_API_KEY")},
+                    "capabilities": ["search_docs", "get_doc", "list_docs"],
+                    "headers": {
+                        "Accept": "application/json",
+                        "Authorization": f"Bearer {os.environ.get('CONTEXT7_API_KEY')}"
+                    }
                 }
             },
             "timeout": int(os.environ.get("MCP_TIMEOUT", "30")),

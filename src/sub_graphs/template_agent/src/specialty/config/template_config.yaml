@@ -1,0 +1,115 @@
+# Template Configuration - Example of configuration overrides
+# This file demonstrates how to override the base configuration with template-specific settings
+# IMPORTANT: This is an example file only. Do not use these values in production.
+# To use this as a template:
+# 1. Copy this file to your agent's config directory
+# 2. Replace example values with your actual values
+# 3. Remove or comment out any overrides you don't need
+#
+# Inheritance Behavior:
+# - Only specified values override the base config
+# - Unspecified values inherit from base_config.yaml
+# - Nested objects are merged, not replaced
+# - Lists are replaced entirely, not merged
+
+# Example LLM overrides
+llm:
+  default:
+    # api_url: "https://api.example.com/v1"  # Example: Override base API URL
+    # default_model: "gpt-4"  # Example: Override default model
+    settings:
+      # temperature: 0.8  # Example: Override base temperature
+      # max_tokens: 4096  # Example: Override base max_tokens
+    models:
+      chat:
+        # model: "gpt-4"  # Example: Override chat model
+        settings:
+          # temperature: 0.7  # Example: Override chat-specific temperature
+          # max_tokens: 4096  # Example: Override chat-specific max_tokens
+
+# Example logging overrides
+logging:
+  # log_level: "DEBUG"  # Example: Override base log level
+  # log_to_file: true  # Example: Override base log_to_file
+  # log_file: "template_agent.log"  # Example: Add template-specific log file
+  # file_level: "DEBUG"  # Example: Override file logging level
+  # console_level: "INFO"  # Example: Override console logging level
+  # log_dir: "./template_logs"  # Example: Override log directory
+  # max_log_size_mb: 20  # Example: Override max log file size
+  # backup_count: 10  # Example: Override number of backup files
+  formatters:
+    # file:  # Example: Override file formatter
+    #   format: "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
+    # console:  # Example: Override console formatter
+    #   format: "%(levelname)s: [%(filename)s:%(lineno)d] - %(message)s"
+  noisy_loggers:
+    # - "custom_noisy_logger"  # Example: Add custom noisy logger
+
+# Example database overrides
+database:
+  # pool_size: 10  # Example: Override base pool_size
+  # max_overflow: 20  # Example: Override base max_overflow
+  # pool_recycle: 1800  # Example: Override base pool_recycle
+
+# Example graph overrides
+graph:
+  # name: "template_specialized_graph"  # Example: Override base graph name
+  # max_depth: 15  # Example: Override base max_depth
+  # max_breadth: 8  # Example: Override base max_breadth
+  nodes:
+    # special_node:  # Example: Add custom node
+    #   type: "custom"
+    #   description: "Template-specific node type"
+  edges:
+    # - from: "special_node"  # Example: Add custom edge
+    #   to: "base_node"
+    #   type: "custom_edge"
+
+# Example agent overrides
+agent:
+  # user_id: "template_user"  # Example: Override base user_id
+  settings:
+    # temperature: 0.8  # Example: Override base temperature
+    # max_tokens: 4096  # Example: Override base max_tokens
+  personality:
+    # name: "template"  # Example: Override personality name
+    # description: "Template-specific personality"  # Example: Override description
+    traits:
+      # - "friendly"  # Example: Add custom traits
+      # - "helpful"
+    goals:
+      # - "be helpful"  # Example: Add custom goals
+      # - "be clear"
+    # system_prompt: "You are a helpful template agent."  # Example: Override system prompt
+    # enabled: true  # Example: Override personality enabled state
+    # file_path: "path/to/personality.json"  # Example: Override personality file path
+    # use_by_default: true  # Example: Override default personality setting
+
+# Example personalities overrides
+personalities:
+  # default_personality: "template"  # Example: Override default personality
+  personalities:
+    # template:  # Example: Add custom personality
+    #   name: "template"
+    #   description: "Template-specific personality"
+    #   traits:
+    #     - "friendly"
+    #     - "helpful"
+    #   goals:
+    #     - "be helpful"
+    #     - "be clear"
+    #   system_prompt: "You are a helpful template agent."
+    #   enabled: true
+    #   file_path: "path/to/template_personality.json"
+    #   use_by_default: true
+
+# Example tool overrides
+tools:
+  # tool_timeout: 60  # Example: Override base tool_timeout
+  # max_retries: 5  # Example: Override base max_retries
+  allowed_tools:
+    # - "test_tool_1"  # Example: Add allowed tools
+    # - "test_tool_2"
+  tool_descriptions:
+    # test_tool_1: "First test tool"  # Example: Add tool descriptions
+    # test_tool_2: "Second test tool" 

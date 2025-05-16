@@ -1210,3 +1210,5 @@ This approach keeps the separation between services and managers while clarifyin
 
 
 ToDo, each package must have full services, managers and tools to stand alone, but must pull from parent if we want to inherit.  We have switched to full relative imports, but this will take some more thought.  
+
+# TODO: Investigate swapping mem0 storage and vector search to swarm_message table

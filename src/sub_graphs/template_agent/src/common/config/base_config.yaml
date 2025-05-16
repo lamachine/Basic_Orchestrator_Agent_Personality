@@ -1,0 +1,137 @@
+llm:
+  default:
+    api_url: "http://localhost:11434"
+    default_model: "llama3.1:latest"
+    timeout: 30
+    settings:
+      max_tokens: 4096
+      context_window: 16384
+      temperature: 0.1
+      top_p: 0.9
+      frequency_penalty: 0.0
+      presence_penalty: 0.0
+    models:
+      embedding:
+        model: "nomic-embed-text"
+        settings:
+          temperature: 0.0
+          max_tokens: 512
+      programming:
+        model: "llama3.1:latest"
+        settings:
+          temperature: 0.2
+          max_tokens: 4096
+      reasoning:
+        model: "deepseek-r1"
+        settings:
+          temperature: 0.3
+          max_tokens: 2048
+      chat:
+        model: "llama3.1:latest"
+        settings:
+          temperature: 0.7
+          max_tokens: 2048
+
+logging:
+  enable_logging: true
+  log_level: "INFO"
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  log_to_console: true
+  log_to_file: false
+  log_rotation: "1 day"
+  log_retention: "7 days"
+  file_level: "DEBUG"
+  console_level: "INFO"
+  log_dir: "./logs"
+  max_log_size_mb: 10
+  backup_count: 5
+  formatters:
+    file:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    console:
+      format: "%(levelname)s: %(message)s"
+  noisy_loggers:
+    - "httpcore.http11"
+    - "httpx"
+    - "urllib3"
+    - "requests"
+    - "chardet.charsetprober"
+    - "asyncio"
+    - "charset_normalizer"
+
+database:
+  provider: "supabase_local"
+  providers:
+    supabase_local:
+      url: "http://localhost:54321"
+      anon_key: "your-anon-key"
+      service_role_key: "your-service-role-key"
+    supabase_web:
+      url: "https://your-project.supabase.co"
+      anon_key: "your-anon-key"
+      service_role_key: "your-service-role-key"
+    postgres:
+      url: "postgresql://user:password@localhost:5432/dbname"
+  pool_size: 5
+  max_overflow: 10
+  echo: false
+  pool_timeout: 30
+  pool_recycle: 3600
+
+graph:
+  name: "template_graph"
+  description: "Base graph configuration"
+  version: "1.0.0"
+  max_depth: 10
+  max_breadth: 5
+  timeout: 300
+  retry_count: 3
+  nodes: {}
+  edges: []
+
+agent:
+  enable_history: true
+  user_id: "developer"
+  graph_name: "template_graph"
+  settings:
+    max_tokens: 4096
+    context_window: 16384
+    temperature: 0.1
+    top_p: 0.9
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+  enable_logging: true
+  prompt_section: ""
+  personality:
+    name: "base"
+    description: "Base personality configuration"
+    traits: []
+    goals: []
+    constraints: []
+    system_prompt: ""
+    examples: []
+    enabled: true
+    file_path: null
+    use_by_default: false
+
+personalities:
+  default_personality: "default"
+  personalities:
+    default:
+      name: "default"
+      description: "Default personality"
+      traits: []
+      goals: []
+      constraints: []
+      system_prompt: ""
+      examples: []
+      enabled: true
+      file_path: null
+      use_by_default: true
+
+tools:
+  tool_timeout: 30
+  max_retries: 3
+  inherit_from_parent: true
+  allowed_tools: []
+  tool_descriptions: {} 

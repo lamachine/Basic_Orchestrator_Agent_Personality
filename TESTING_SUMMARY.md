@@ -27,6 +27,7 @@ Our test suite directly aligns with the implementation checklist from README_TOO
 | 2.E - Create modular structure | test_modular_structure.py | ✅ Created |
 | 2.F - Implement task functionality | test_personal_assistant_task_list.py | ✅ Created |
 | 2.G - Test multiple tools | test_dynamic_tool_loading.py | ✅ Created |
+| Tools Module - Base classes and utilities | test_base_tool.py, test_tool_utils.py, test_initialize_tools.py | ✅ Created |
 
 Additionally, we've created a test runner script (`run_tool_tests.py`) and comprehensive documentation (`tests/README.md`).
 
@@ -42,6 +43,26 @@ Each test file contains:
 - Tests for expected use cases (should pass)
 - Tests for error handling (should fail)
 - Tests for edge cases and boundary conditions
+
+### Recently Added Tests
+
+We've recently enhanced our test coverage by adding comprehensive tests for the core tool infrastructure:
+
+- **test_base_tool.py**: Tests the BaseTool abstract class that all tools inherit from
+- **test_tool_utils.py**: Tests utility functions used by tools for state management and execution
+- **test_initialize_tools.py**: Tests the tool discovery and initialization process
+- **test_base_interface.py**: Tests the base user interface implementation, including MessageFormat utilities and the abstract BaseUserInterface class
+- **test_cli_display.py**: Tests the CLI display functionality, including message formatting, user input handling, and tool result display
+- **test_datetime_utils.py**: Tests datetime utilities including formatting, parsing, and serialization functions
+- **test_text_processing.py**: Tests text processing utilities including text cleaning, entity extraction, and message formatting
+- **test_embedding_utils.py**: Tests embedding utilities including vector similarity calculations and text embedding functionality
+
+These new tests follow the same pattern as our existing tests, with each containing three types of test cases:
+1. Normal operation tests
+2. Error condition tests
+3. Edge case tests
+
+This consistent approach ensures thorough testing of all components and helps maintain a high level of code quality.
 
 ## Current Test Status
 
