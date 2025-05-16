@@ -160,14 +160,16 @@ class LLMServiceConfig(ServiceConfig):
     max_tokens: int = 2000
     stop_sequences: List[str] = Field(default_factory=list)
 
-    @validator('temperature')
+    @field_validator('temperature')
+    @classmethod
     def validate_temperature(cls, v):
         """Validate temperature value."""
         if not 0 <= v <= 2:
             raise ValueError('Temperature must be between 0 and 2')
         return v
 
-    @validator('max_tokens')
+    @field_validator('max_tokens')
+    @classmethod
     def validate_max_tokens(cls, v):
         """Validate max tokens value."""
         if v < 1:
@@ -181,21 +183,24 @@ class DBServiceConfig(ServiceConfig):
     timeout: int = 30
     retry_count: int = 3
 
-    @validator('pool_size')
+    @field_validator('pool_size')
+    @classmethod
     def validate_pool_size(cls, v):
         """Validate pool size."""
         if v < 1:
             raise ValueError('Pool size must be at least 1')
         return v
 
-    @validator('timeout')
+    @field_validator('timeout')
+    @classmethod
     def validate_timeout(cls, v):
         """Validate timeout."""
         if v < 1:
             raise ValueError('Timeout must be at least 1 second')
         return v
 
-    @validator('retry_count')
+    @field_validator('retry_count')
+    @classmethod
     def validate_retry_count(cls, v):
         """Validate retry count."""
         if v < 0:
@@ -208,21 +213,24 @@ class SessionServiceConfig(ServiceConfig):
     max_sessions: int = 100
     cleanup_interval: int = 300
 
-    @validator('session_timeout')
+    @field_validator('session_timeout')
+    @classmethod
     def validate_session_timeout(cls, v):
         """Validate session timeout."""
         if v < 60:
             raise ValueError('Session timeout must be at least 60 seconds')
         return v
 
-    @validator('max_sessions')
+    @field_validator('max_sessions')
+    @classmethod
     def validate_max_sessions(cls, v):
         """Validate max sessions."""
         if v < 1:
             raise ValueError('Max sessions must be at least 1')
         return v
 
-    @validator('cleanup_interval')
+    @field_validator('cleanup_interval')
+    @classmethod
     def validate_cleanup_interval(cls, v):
         """Validate cleanup interval."""
         if v < 60:
