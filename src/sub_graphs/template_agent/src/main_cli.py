@@ -12,15 +12,24 @@ import asyncio
 from typing import Optional, Dict, Any
 import json
 
-from .common.services.logging_service import get_logger, setup_logging
-from .common.ui.adapters.cli.interface import CLIInterface
-from .specialty.agents.template_agent import TemplateAgent
-from .common.managers.session_manager import SessionManager
-from .common.services.session_service import SessionService
-from .common.services.db_service import DBService
-from .common.state.state_models import MessageState
-from .common.managers.memory_manager import Mem0Memory
-from .common.models.service_models import DBServiceConfig, ServiceConfig
+# Ensure the src directory is in the path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+template_agent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, template_agent_dir)
+
+# Now import using relative paths within the template_agent package
+from common.services.logging_service import get_logger, setup_logging
+from common.ui.adapters.cli.interface import CLIInterface
+from specialty.agents.template_agent import TemplateAgent
+from common.managers.session_manager import SessionManager
+from common.services.session_service import SessionService
+from common.services.db_service import DBService
+from common.state.state_models import MessageState
+from common.managers.memory_manager import Mem0Memory
+from common.models.service_models import DBServiceConfig, ServiceConfig
+
+# Setup logging first
+setup_logging()
 
 logger = get_logger(__name__)
 
