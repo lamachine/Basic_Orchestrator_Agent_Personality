@@ -235,4 +235,38 @@ class SessionServiceConfig(ServiceConfig):
         """Validate cleanup interval."""
         if v < 60:
             raise ValueError('Cleanup interval must be at least 60 seconds')
+        return v
+
+class LoggingServiceConfig(ServiceConfig):
+    """Configuration specific to logging services."""
+    log_level: str = "INFO"
+    console_level: str = "INFO"
+    file_level: str = "DEBUG"
+    log_file_path: Optional[str] = None
+    max_file_size: int = 10485760  # 10MB
+    backup_count: int = 5
+    
+    @field_validator('log_level', 'console_level', 'file_level')
+    @classmethod
+    def validate_log_level(cls, v):
+        """Validate log level."""
+        valid_levels = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
+        if v.upper() not in valid_levels:
+            raise ValueError(f'Log level must be one of {valid_levels}')
+        return v.upper()
+    
+    @field_validator('max_file_size')
+    @classmethod
+    def validate_max_file_size(cls, v):
+        """Validate max file size."""
+        if v < 1024:
+            raise ValueError('Max file size must be at least 1KB')
+        return v
+    
+    @field_validator('backup_count')
+    @classmethod
+    def validate_backup_count(cls, v):
+        """Validate backup count."""
+        if v < 0:
+            raise ValueError('Backup count must be non-negative')
         return v 
