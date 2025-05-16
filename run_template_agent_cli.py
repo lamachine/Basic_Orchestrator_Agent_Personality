@@ -9,80 +9,124 @@ import os
 import sys
 import logging
 import asyncio
+import traceback
+import importlib.util
 
-# Configure basic logging first
+# Configure basic logging first with more verbose output
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Set to DEBUG for more verbose output
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-# Add the template agent directory to sys.path
-template_agent_dir = os.path.join("src", "sub_graphs", "template_agent")
-if os.path.exists(template_agent_dir):
-    if template_agent_dir not in sys.path:
-        sys.path.append(os.path.abspath(template_agent_dir))
-    logger.info(f"Added {template_agent_dir} to sys.path")
-else:
-    logger.error(f"Template agent directory not found at {template_agent_dir}")
-    sys.exit(1)
+# Print Python version and path info for debugging
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Current directory: {os.getcwd()}")
 
+# Add directories to sys.path
+root_dir = os.path.abspath(os.path.dirname(__file__))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+logger.info(f"Added {root_dir} to sys.path")
+
+# Try to load the main_cli module
 try:
-    # Import template agent components using relative imports from its structure
-    from src.specialty.agents.template_agent import TemplateAgent
-    from src.common.ui.adapters.cli.interface import CLIInterface
-    from src.common.managers.session_manager import SessionManager
-    from src.common.services.session_service import SessionService
-    from src.common.managers.memory_manager import Mem0Memory
-    
-    # Try to use project's logging configuration
-    try:
-        from src.config.logging_config import setup_logging
-        file_handler, console_handler = setup_logging()
-        logger.info("Using project logging configuration")
-    except Exception as e:
-        logger.warning(f"Could not use project logging config: {e}. Using basic logging.")
-
-    async def run_template_agent():
-        """Run the template agent with CLI interface."""
-        try:
-            # Initialize memory manager
-            mem0_config_path = os.path.join("mem0.config.json")
-            try:
-                memory_manager = Mem0Memory(config_path=mem0_config_path)
-                logger.info(f"Initialized memory manager with config: {mem0_config_path}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Mem0Memory, running without memory: {e}")
-                memory_manager = None
-            
-            # Initialize template agent
-            agent = TemplateAgent(memory_manager=memory_manager)
-            
-            # Initialize graph state
-            agent.graph_state = {}
-            
-            # Initialize simple session manager (without database)
-            session_manager = SessionManager(SessionService(None))
-            
-            # Initialize CLI interface
-            interface = CLIInterface(agent, session_manager)
-            
-            # Start the interface
-            logger.info("Starting template agent CLI interface")
-            await interface.start()
-            
-        except KeyboardInterrupt:
-            logger.info("Interrupted by user")
-        except Exception as e:
-            logger.error(f"Error running template agent: {e}", exc_info=True)
-            return 1
+    # Get the main_cli.py path
+    main_cli_path = os.path.join(root_dir, "src", "sub_graphs", "template_agent", "src", "main_cli.py")
+    if os.path.exists(main_cli_path):
+        logger.info(f"Found main_cli.py at {main_cli_path}")
         
-        return 0
+        # First check for null bytes
+        try:
+            with open(main_cli_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if '\0' in content:
+                    logger.error("Found null bytes in main_cli.py!")
+                    cleaned_content = content.replace('\0', '')
+                    # Write cleaned file
+                    clean_path = main_cli_path + '.clean'
+                    with open(clean_path, 'w', encoding='utf-8') as clean_f:
+                        clean_f.write(cleaned_content)
+                    logger.info(f"Wrote cleaned file to {clean_path}")
+                    main_cli_path = clean_path
+                else:
+                    logger.info("No null bytes found in main_cli.py")
+        except Exception as e:
+            logger.error(f"Error checking for null bytes: {e}")
+            logger.error(traceback.format_exc())
+        
+        # Import the module using spec
+        try:
+            logger.info("Importing main_cli.py using spec...")
+            spec = importlib.util.spec_from_file_location("main_cli", main_cli_path)
+            main_cli = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(main_cli)
+            
+            # Execute the main function
+            logger.info("Executing main() function from main_cli.py...")
+            exit_code = main_cli.main()
+            sys.exit(exit_code)
+        except Exception as e:
+            logger.error(f"Error importing main_cli.py: {e}")
+            logger.error(traceback.format_exc())
+            raise ImportError("Failed to import main_cli.py")
+    else:
+        logger.error(f"Could not find main_cli.py at {main_cli_path}")
+        raise FileNotFoundError(f"main_cli.py not found at {main_cli_path}")
+
+except Exception as e:
+    logger.error(f"Failed to run template agent: {e}")
+    logger.error(traceback.format_exc())
+    
+    # Fallback to a simple agent
+    logger.info("Falling back to simple agent implementation...")
+    
+    class SimpleAgent:
+        def __init__(self):
+            self.graph_state = {}
+            logger.info("Initialized SimpleAgent")
+        
+        async def process_message(self, message, session_state=None):
+            logger.info(f"Processing message: {message}")
+            return {
+                "status": "success",
+                "response": f"Echo: {message} (from simple fallback agent)"
+            }
+    
+    class SimpleSessionManager:
+        def __init__(self):
+            logger.info("Initialized SimpleSessionManager")
+    
+    async def run_simple_cli():
+        """Run a simple agent CLI interface as fallback."""
+        try:
+            agent = SimpleAgent()
+            
+            print("\nSimple Agent CLI Interface (Fallback)")
+            print("Type 'exit' to quit\n")
+            
+            while True:
+                try:
+                    user_input = input("You: ")
+                    if user_input.lower() in ['exit', 'quit']:
+                        break
+                    
+                    response = await agent.process_message(user_input)
+                    print(f"Agent: {response.get('response', '')}")
+                except KeyboardInterrupt:
+                    break
+                except Exception as e:
+                    logger.error(f"Error processing input: {e}")
+                    print(f"Error: {str(e)}")
+            
+            print("\nExiting CLI interface")
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error running simple CLI: {e}")
+            logger.error(traceback.format_exc())
+            return 1
 
     if __name__ == "__main__":
-        exit_code = asyncio.run(run_template_agent())
-        sys.exit(exit_code)
-        
-except Exception as e:
-    logger.error(f"Failed to initialize template agent: {e}", exc_info=True)
-    sys.exit(1) 
+        exit_code = asyncio.run(run_simple_cli())
+        sys.exit(exit_code) 

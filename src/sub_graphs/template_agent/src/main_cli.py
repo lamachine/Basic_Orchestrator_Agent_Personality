@@ -11,27 +11,125 @@ import argparse
 import asyncio
 from typing import Optional, Dict, Any
 import json
+import importlib
+import logging
 
-# Ensure the src directory is in the path
+# Configure basic logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+basic_logger = logging.getLogger(__name__)
+
+# Configure paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
 template_agent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, template_agent_dir)
+sys.path.insert(0, os.path.dirname(template_agent_dir))  # Add parent of template_agent to path
 
-# Now import using relative paths within the template_agent package
-from common.services.logging_service import get_logger, setup_logging
-from common.ui.adapters.cli.interface import CLIInterface
-from specialty.agents.template_agent import TemplateAgent
-from common.managers.session_manager import SessionManager
-from common.services.session_service import SessionService
-from common.services.db_service import DBService
-from common.state.state_models import MessageState
-from common.managers.memory_manager import Mem0Memory
-from common.models.service_models import DBServiceConfig, ServiceConfig
+basic_logger.info(f"Python path: {sys.path}")
+basic_logger.info(f"Current directory: {os.getcwd()}")
+basic_logger.info(f"Script directory: {current_dir}")
 
-# Setup logging first
+# Define the modules we need
+modules_to_import = {
+    "logging_service": "common.services.logging_service",
+    "cli_interface": "common.ui.adapters.cli.interface",
+    "template_agent": "specialty.agents.template_agent",
+    "session_manager": "common.managers.session_manager",
+    "session_service": "common.services.session_service",
+    "db_service": "common.services.db_service",
+    "state_models": "common.state.state_models",
+    "memory_manager": "common.managers.memory_manager",
+    "service_models": "common.models.service_models"
+}
+
+# Dynamic import of the modules
+imported_modules = {}
+import_method = None
+
+# Try different import strategies
+try:
+    # First try using importlib directly
+    for name, module_path in modules_to_import.items():
+        try:
+            imported_modules[name] = importlib.import_module(module_path)
+            basic_logger.info(f"Successfully imported {module_path} as {name}")
+        except ImportError as e:
+            basic_logger.warning(f"Could not import {module_path}: {e}")
+            raise ImportError(f"Failed to import {module_path}")
+
+    import_method = "importlib"
+except ImportError:
+    try:
+        # Try relative imports
+        modules_to_import_relative = {
+            "logging_service": ".common.services.logging_service",
+            "cli_interface": ".common.ui.adapters.cli.interface",
+            "template_agent": ".specialty.agents.template_agent",
+            "session_manager": ".common.managers.session_manager",
+            "session_service": ".common.services.session_service",
+            "db_service": ".common.services.db_service",
+            "state_models": ".common.state.state_models",
+            "memory_manager": ".common.managers.memory_manager",
+            "service_models": ".common.models.service_models"
+        }
+
+        package = __package__ or "src.sub_graphs.template_agent.src"
+        for name, module_path in modules_to_import_relative.items():
+            try:
+                imported_modules[name] = importlib.import_module(module_path, package=package)
+                basic_logger.info(f"Successfully imported {module_path} as {name}")
+            except ImportError as e:
+                basic_logger.warning(f"Could not import {module_path}: {e}")
+                raise ImportError(f"Failed to import {module_path}")
+                
+        import_method = "relative importlib"
+    except ImportError:
+        try:
+            # Finally try absolute imports from project root
+            modules_to_import_absolute = {
+                "logging_service": "src.sub_graphs.template_agent.src.common.services.logging_service",
+                "cli_interface": "src.sub_graphs.template_agent.src.common.ui.adapters.cli.interface",
+                "template_agent": "src.sub_graphs.template_agent.src.specialty.agents.template_agent",
+                "session_manager": "src.sub_graphs.template_agent.src.common.managers.session_manager",
+                "session_service": "src.sub_graphs.template_agent.src.common.services.session_service",
+                "db_service": "src.sub_graphs.template_agent.src.common.services.db_service",
+                "state_models": "src.sub_graphs.template_agent.src.common.state.state_models",
+                "memory_manager": "src.sub_graphs.template_agent.src.common.managers.memory_manager",
+                "service_models": "src.sub_graphs.template_agent.src.common.models.service_models"
+            }
+
+            for name, module_path in modules_to_import_absolute.items():
+                try:
+                    imported_modules[name] = importlib.import_module(module_path)
+                    basic_logger.info(f"Successfully imported {module_path} as {name}")
+                except ImportError as e:
+                    basic_logger.warning(f"Could not import {module_path}: {e}")
+                    raise ImportError(f"Failed to import {module_path}")
+                    
+            import_method = "absolute importlib"
+        except ImportError:
+            basic_logger.error("All import strategies failed")
+            raise ImportError("Could not import required modules")
+
+# Extract the needed components from imported modules
+get_logger = imported_modules["logging_service"].get_logger
+setup_logging = imported_modules["logging_service"].setup_logging
+CLIInterface = imported_modules["cli_interface"].CLIInterface
+TemplateAgent = imported_modules["template_agent"].TemplateAgent
+SessionManager = imported_modules["session_manager"].SessionManager
+SessionService = imported_modules["session_service"].SessionService
+DBService = imported_modules["db_service"].DBService
+MessageState = imported_modules["state_models"].MessageState
+Mem0Memory = imported_modules["memory_manager"].Mem0Memory
+DBServiceConfig = imported_modules["service_models"].DBServiceConfig
+ServiceConfig = imported_modules["service_models"].ServiceConfig
+
+# Setup logging
 setup_logging()
-
 logger = get_logger(__name__)
+logger.info(f"Successfully imported modules using {import_method} imports")
 
 def load_db_config() -> DBServiceConfig:
     """
@@ -134,7 +232,13 @@ async def run_with_cli_interface(session_id: Optional[str] = None) -> int:
         return 1
 
 def main() -> int:
-    """Parse command line arguments and run the application."""
+    """
+    Main entry point for running the CLI interface.
+    Parse command line arguments and run the application.
+    
+    Returns:
+        Exit code (0 for success, non-zero for error)
+    """
     parser = argparse.ArgumentParser(description="Run the template agent with CLI interface")
     parser.add_argument(
         "--session", "-s",
@@ -146,5 +250,6 @@ def main() -> int:
         session_id=args.session
     ))
 
+# Only run the application if this script is executed directly
 if __name__ == "__main__":
     sys.exit(main()) 
