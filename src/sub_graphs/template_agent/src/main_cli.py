@@ -131,19 +131,25 @@ setup_logging()
 logger = get_logger(__name__)
 logger.info(f"Successfully imported modules using {import_method} imports")
 
-def load_db_config() -> DBServiceConfig:
+def load_db_config():
     """
     Load database configuration from environment or default values.
     
     Returns:
-        DBServiceConfig instance
+        DBServiceConfig instance from dynamically imported module
     """
     # Try to get values from environment variables
     connection_string = os.environ.get("DB_CONNECTION_STRING", "postgresql://postgres:postgres@localhost:5432/agent_db")
     supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_key = os.environ.get("SUPABASE_KEY", "")
     
-    # Create config with default values
+    logger.info(f"Creating DB config with connection: {connection_string}")
+    if supabase_url:
+        logger.info(f"Supabase URL: {supabase_url[:10]}... (truncated)")
+    else:
+        logger.info("No Supabase URL configured")
+    
+    # Create config with default values using the dynamically imported class
     config = DBServiceConfig(
         name="db_service",
         enabled=True,
@@ -156,6 +162,35 @@ def load_db_config() -> DBServiceConfig:
     
     return config
 
+def check_environment():
+    """
+    Verify that all required components were properly imported.
+    Raises an informative exception if any component is missing.
+    """
+    required_components = [
+        ("get_logger", "logging service"),
+        ("setup_logging", "logging service"),
+        ("CLIInterface", "CLI interface"),
+        ("TemplateAgent", "template agent"),
+        ("SessionManager", "session manager"),
+        ("SessionService", "session service"),
+        ("DBService", "database service"),
+        ("MessageState", "message state"),
+        ("Mem0Memory", "memory manager"),
+        ("DBServiceConfig", "database configuration"),
+        ("ServiceConfig", "service configuration")
+    ]
+    
+    missing = []
+    for component, description in required_components:
+        if not globals().get(component):
+            missing.append(f"{component} ({description})")
+    
+    if missing:
+        raise ImportError(f"Missing required components: {', '.join(missing)}")
+    
+    basic_logger.info("Environment check passed - all components are available")
+
 async def run_with_cli_interface(session_id: Optional[str] = None) -> int:
     """
     Run the template agent with the CLI interface.
@@ -167,6 +202,9 @@ async def run_with_cli_interface(session_id: Optional[str] = None) -> int:
         Exit code (0 for success, non-zero for error)
     """
     try:
+        # Verify all required components are available
+        check_environment()
+        
         logger.info("Initializing template agent with CLI interface")
         
         # Initialize database and session services

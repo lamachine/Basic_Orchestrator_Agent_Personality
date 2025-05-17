@@ -64,8 +64,24 @@ try:
             
             # Execute the main function
             logger.info("Executing main() function from main_cli.py...")
-            exit_code = main_cli.main()
-            sys.exit(exit_code)
+            try:
+                if hasattr(main_cli, 'main'):
+                    logger.info("Found main function in main_cli module")
+                    exit_code = main_cli.main()
+                    sys.exit(exit_code)
+                elif hasattr(main_cli, 'run_with_cli_interface'):
+                    logger.info("Found run_with_cli_interface function in main_cli module")
+                    # Need to run it asynchronously
+                    exit_code = asyncio.run(main_cli.run_with_cli_interface())
+                    sys.exit(exit_code)
+                else:
+                    logger.error("No suitable entry point found in main_cli.py")
+                    logger.info(f"Available attributes: {dir(main_cli)}")
+                    raise AttributeError("No suitable entry point found in main_cli.py")
+            except Exception as e:
+                logger.error(f"Error executing main_cli.py: {e}")
+                logger.error(traceback.format_exc())
+                raise
         except Exception as e:
             logger.error(f"Error importing main_cli.py: {e}")
             logger.error(traceback.format_exc())
