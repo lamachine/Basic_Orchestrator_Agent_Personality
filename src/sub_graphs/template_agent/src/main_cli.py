@@ -9,7 +9,7 @@ import sys
 import os
 import argparse
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
 import importlib
 import logging
@@ -31,11 +31,11 @@ basic_logger.info(f"Python path: {sys.path}")
 basic_logger.info(f"Current directory: {os.getcwd()}")
 basic_logger.info(f"Script directory: {current_dir}")
 
-# Define the modules we need
+# Define the modules we need to import
 modules_to_import = {
     "logging_service": "common.services.logging_service",
     "cli_interface": "common.ui.adapters.cli.interface",
-    "template_agent": "specialty.agents.template_agent",
+    "template_agent": "specialty.agents.template_agent", 
     "session_manager": "common.managers.session_manager",
     "session_service": "common.services.session_service",
     "db_service": "common.services.db_service",
@@ -47,6 +47,17 @@ modules_to_import = {
 # Dynamic import of the modules
 imported_modules = {}
 import_method = None
+
+# Define service model classes we need to extract
+service_model_classes = [
+    "ServiceConfig",
+    "ServiceCapability",
+    "DBServiceConfig",
+    "LLMServiceConfig", 
+    "SessionServiceConfig",
+    "LoggingServiceConfig",
+    "PoolConfig"
+]
 
 # Try different import strategies
 try:
@@ -123,13 +134,56 @@ SessionService = imported_modules["session_service"].SessionService
 DBService = imported_modules["db_service"].DBService
 MessageState = imported_modules["state_models"].MessageState
 Mem0Memory = imported_modules["memory_manager"].Mem0Memory
-DBServiceConfig = imported_modules["service_models"].DBServiceConfig
-ServiceConfig = imported_modules["service_models"].ServiceConfig
+
+# Extract all service model classes to the global namespace
+for class_name in service_model_classes:
+    if hasattr(imported_modules["service_models"], class_name):
+        globals()[class_name] = getattr(imported_modules["service_models"], class_name)
+        basic_logger.info(f"Successfully extracted {class_name} from service_models")
+    else:
+        basic_logger.warning(f"Could not find {class_name} in service_models")
+
+# Verify all service model classes
+for class_name in service_model_classes:
+    if class_name not in globals():
+        basic_logger.warning(f"Service model class {class_name} is not available in global namespace")
 
 # Setup logging
 setup_logging()
 logger = get_logger(__name__)
 logger.info(f"Successfully imported modules using {import_method} imports")
+
+def check_environment():
+    """
+    Verify that all required components were properly imported.
+    Raises an informative exception if any component is missing.
+    """
+    # Core components
+    required_components = [
+        ("get_logger", "logging service"),
+        ("setup_logging", "logging service"),
+        ("CLIInterface", "CLI interface"),
+        ("TemplateAgent", "template agent"),
+        ("SessionManager", "session manager"),
+        ("SessionService", "session service"),
+        ("DBService", "database service"),
+        ("MessageState", "message state"),
+        ("Mem0Memory", "memory manager")
+    ]
+    
+    # Add service model classes to required components
+    for class_name in service_model_classes:
+        required_components.append((class_name, "service model class"))
+    
+    missing = []
+    for component, description in required_components:
+        if not globals().get(component):
+            missing.append(f"{component} ({description})")
+    
+    if missing:
+        raise ImportError(f"Missing required components: {', '.join(missing)}")
+    
+    basic_logger.info("Environment check passed - all components are available")
 
 def load_db_config():
     """
@@ -161,35 +215,6 @@ def load_db_config():
     )
     
     return config
-
-def check_environment():
-    """
-    Verify that all required components were properly imported.
-    Raises an informative exception if any component is missing.
-    """
-    required_components = [
-        ("get_logger", "logging service"),
-        ("setup_logging", "logging service"),
-        ("CLIInterface", "CLI interface"),
-        ("TemplateAgent", "template agent"),
-        ("SessionManager", "session manager"),
-        ("SessionService", "session service"),
-        ("DBService", "database service"),
-        ("MessageState", "message state"),
-        ("Mem0Memory", "memory manager"),
-        ("DBServiceConfig", "database configuration"),
-        ("ServiceConfig", "service configuration")
-    ]
-    
-    missing = []
-    for component, description in required_components:
-        if not globals().get(component):
-            missing.append(f"{component} ({description})")
-    
-    if missing:
-        raise ImportError(f"Missing required components: {', '.join(missing)}")
-    
-    basic_logger.info("Environment check passed - all components are available")
 
 async def run_with_cli_interface(session_id: Optional[str] = None) -> int:
     """
