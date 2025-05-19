@@ -1,10 +1,9 @@
 """
-Parent graph adapter for the template agent.
+Template Agent Parent Graph Adapter package.
 
-This adapter provides a standardized interface for communication between
-the template agent and its parent graph.
+This package contains the parent graph interface adapter implementation.
 """
 
 from .parent_graph_adapter import ParentGraphAdapter
 
-__all__ = ['ParentGraphAdapter'] 
+__all__ = ["ParentGraphAdapter"]

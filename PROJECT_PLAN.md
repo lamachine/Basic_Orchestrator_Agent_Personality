@@ -91,7 +91,7 @@ The project follows a modular architecture with clear separation of concerns:
 
 ### File Structure
 - Module-based organization (e.g., all agent code in `src/agents/`)
-- Target length: 200 lines to take advantage of Cursor file reading limit.  
+- Target length: 200 lines to take advantage of Cursor file reading limit.
 - Maximum file length: 500 lines
 - One class per file (with exceptions for closely related small classes)
 - Clean `__init__.py` files with only docstrings
@@ -159,7 +159,7 @@ The project follows a modular architecture with clear separation of concerns:
 3. Implement functionality
 4. Document code and features
 5. Update project status
-6. Review and refactor 
+6. Review and refactor
 
 ## Graph Communication Paradigm
 
@@ -168,4 +168,4 @@ All communications between graphs will come down through tools, and be handled b
 - `api_interface.py`: Handles web-based interactions (e.g., MCP)
 - `cli_interface.py`: Enables direct terminal-based interface for stand-alone tool/graph deployment
 
-Initial development will use the sub_graph paradigm with message passing, leveraging all existing orchestrator infrastructure. 
+Initial development will use the sub_graph paradigm with message passing, leveraging all existing orchestrator infrastructure.

@@ -33,13 +33,13 @@
         "postgres": {
             "command": "docker",
             "args": [
-                "run", 
-                "-i", 
+                "run",
+                "-i",
                 "--rm",
                 "-e", "DEBUG=1",
                 "-e", "NODE_DEBUG=*",
                 "-e", "POSTGRES_DEBUG=1",
-                "mcp/postgres", 
+                "mcp/postgres",
                 "postgresql://user:password@host.docker.internal:5432/postgres"
             ]
         },

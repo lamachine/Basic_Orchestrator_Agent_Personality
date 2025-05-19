@@ -18,29 +18,38 @@ database:
 # provider, url, anon_key, service_role_key
 # Most common/preferred: provider, url, anon_key, service_role_key
 """
-from pydantic import BaseModel, ValidationError
-from typing import Optional, Dict
-import yaml
+
 import os
+from typing import Dict, Optional
+
+import yaml
+from pydantic import BaseModel, ValidationError
+
 
 class SupabaseConfig(BaseModel):
     url: str
     anon_key: str
     service_role_key: str
 
+
 class PostgresConfig(BaseModel):
     url: str
+
 
 class DatabaseProvidersConfig(BaseModel):
     supabase_local: Optional[SupabaseConfig]
     supabase_web: Optional[SupabaseConfig]
     postgres: Optional[PostgresConfig]
 
+
 class DatabaseConfig(BaseModel):
     provider: str = "supabase_local"
     providers: DatabaseProvidersConfig
 
-def get_database_config(config_path: str = 'src/config/developer_user_config.yaml') -> DatabaseConfig:
+
+def get_database_config(
+    config_path: str = "src/config/developer_user_config.yaml",
+) -> DatabaseConfig:
     """
     Load and validate database config from YAML using Pydantic.
     Args:
@@ -51,21 +60,26 @@ def get_database_config(config_path: str = 'src/config/developer_user_config.yam
         ValueError: If config is invalid.
     """
     if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f) or {}
-        section = config.get('database', {})
-        providers = section.get('providers', {})
+        section = config.get("database", {})
+        providers = section.get("providers", {})
         validated_providers = {}
-        if 'supabase_local' in providers:
-            validated_providers['supabase_local'] = SupabaseConfig(**providers['supabase_local'])
-        if 'supabase_web' in providers:
-            validated_providers['supabase_web'] = SupabaseConfig(**providers['supabase_web'])
-        if 'postgres' in providers:
-            validated_providers['postgres'] = PostgresConfig(**providers['postgres'])
-        section['providers'] = DatabaseProvidersConfig(**validated_providers)
+        if "supabase_local" in providers:
+            validated_providers["supabase_local"] = SupabaseConfig(**providers["supabase_local"])
+        if "supabase_web" in providers:
+            validated_providers["supabase_web"] = SupabaseConfig(**providers["supabase_web"])
+        if "postgres" in providers:
+            validated_providers["postgres"] = PostgresConfig(**providers["postgres"])
+        section["providers"] = DatabaseProvidersConfig(**validated_providers)
         try:
             return DatabaseConfig(**section)
         except ValidationError as e:
             raise ValueError(f"Invalid database config: {e}")
     # Default: only supabase_local
-    return DatabaseConfig(provider="supabase_local", providers=DatabaseProvidersConfig(supabase_local=SupabaseConfig(url="", anon_key="", service_role_key=""))) 
+    return DatabaseConfig(
+        provider="supabase_local",
+        providers=DatabaseProvidersConfig(
+            supabase_local=SupabaseConfig(url="", anon_key="", service_role_key="")
+        ),
+    )

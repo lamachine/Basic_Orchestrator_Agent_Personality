@@ -1,84 +1,87 @@
 """
-State models for the template agent.
+State Models Module
 
-This module provides unified state models using Pydantic for type safety and validation.
+This module defines the core state models used throughout the application.
+These models represent the fundamental data structures for managing:
+1. Graph state and transitions
+2. Message handling and routing
+3. Session management
+4. State persistence
 """
 
-from enum import Enum
-from typing import Dict, Any, Optional, List
 from datetime import datetime
-from uuid import uuid4
-from pydantic import BaseModel, Field, validator
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field
+
 
 class MessageType(str, Enum):
     """Types of messages in the system."""
+
     REQUEST = "request"
     RESPONSE = "response"
+    SYSTEM = "system"
     ERROR = "error"
-    STATUS = "status"
+    DEBUG = "debug"
+
 
 class MessageStatus(str, Enum):
-    """Status values for messages."""
+    """Status of a message in the system."""
+
     PENDING = "pending"
-    RUNNING = "running"
-    SUCCESS = "success"
-    PARTIAL = "partial"
-    ERROR = "error"
+    PROCESSING = "processing"
     COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class MessageRole(str, Enum):
+    """Role of a message sender/recipient."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+    TOOL = "tool"
+
 
 class Message(BaseModel):
-    """Unified message structure for all communications."""
-    request_id: str = Field(default_factory=lambda: str(uuid4()))
-    parent_request_id: Optional[str] = None
-    type: MessageType
-    status: MessageStatus
-    timestamp: datetime = Field(default_factory=datetime.now)
-    content: str
-    data: Dict[str, Any] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    """Model for a message in the system."""
 
-    @validator('content')
-    def validate_content_length(cls, v):
-        """Validate content length."""
-        if len(v) > 1000000:  # 1MB limit
-            raise ValueError('Content length exceeds 1MB limit')
-        return v
+    request_id: str = Field(..., description="Unique identifier for the request")
+    parent_request_id: Optional[str] = Field(None, description="ID of the parent request")
+    type: MessageType = Field(..., description="Type of message")
+    status: MessageStatus = Field(default=MessageStatus.PENDING, description="Current status")
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When the message was created"
+    )
+    content: str = Field(..., description="Message content")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Additional data")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Message metadata")
 
-    @validator('metadata')
-    def validate_metadata_size(cls, v):
-        """Validate metadata size."""
-        if len(str(v)) > 10000:  # 10KB limit
-            raise ValueError('Metadata size exceeds 10KB limit')
-        return v
-
-    def create_child_message(self, content: str, data: Dict[str, Any] = None) -> 'Message':
-        """Create a child message for sub-requests."""
-        return Message(
-            parent_request_id=self.request_id,
-            type=self.type,
-            status=MessageStatus.PENDING,
-            content=content,
-            data=data or {},
-            metadata=self.metadata
-        )
 
 class GraphState(BaseModel):
-    """Unified state model using Pydantic."""
-    messages: List[Message] = Field(default_factory=list)
-    conversation_state: Dict[str, Any] = Field(default_factory=dict)
-    agent_states: Dict[str, Any] = Field(default_factory=dict)
-    current_task: Optional[str] = None
-    task_history: List[str] = Field(default_factory=list)
-    agent_results: Dict[str, Any] = Field(default_factory=dict)
-    final_result: Optional[str] = None
+    """Model for the current state of the graph."""
 
-    @validator('messages')
-    def validate_messages_size(cls, v):
-        """Validate total messages size."""
-        total_size = sum(len(msg.content) for msg in v)
-        if total_size > 10000000:  # 10MB limit
-            raise ValueError('Total messages size exceeds 10MB limit')
-        return v
+    session_id: str = Field(..., description="Session identifier")
+    user_id: str = Field(..., description="User identifier")
+    messages: List[Message] = Field(default_factory=list, description="List of messages")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="State metadata")
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="When the state was created"
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.now, description="When the state was last updated"
+    )
 
-    class Config:
-        arbitrary_types_allowed = True 
+
+class StateTransition(BaseModel):
+    """Model for a state transition."""
+
+    from_state: str = Field(..., description="Source state")
+    to_state: str = Field(..., description="Target state")
+    trigger: str = Field(..., description="What triggered the transition")
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When the transition occurred"
+    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Transition metadata")

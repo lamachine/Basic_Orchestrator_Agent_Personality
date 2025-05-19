@@ -1,9 +1,9 @@
 """
-Template agent adapter package.
+Template Agent Adapter package.
 
-This package provides the template agent adapter implementation.
+This package contains the template agent interface adapter implementation.
 """
 
 from .template_agent_adapter import TemplateAgentAdapter
 
-__all__ = ['TemplateAgentAdapter'] 
+__all__ = ["TemplateAgentAdapter"]

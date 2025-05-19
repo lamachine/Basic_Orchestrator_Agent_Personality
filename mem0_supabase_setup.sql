@@ -75,4 +75,4 @@ CREATE POLICY "Enable read access for authenticated users" ON memory_relationshi
 CREATE POLICY "Enable write access for authenticated users" ON memory_relationships
     FOR INSERT
     TO authenticated
-    WITH CHECK (true); 
+    WITH CHECK (true);

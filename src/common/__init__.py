@@ -1,10 +1,9 @@
 """
-Common functionality shared across all agent implementations.
-This package contains the base components needed for any agent to function.
+Common package.
+
+This package contains shared utilities and models.
 """
 
-from .agents import BaseAgent
-from .tools import ToolRegistry
-from .config import Configuration
+from .models import *
 
-__all__ = ['BaseAgent', 'ToolRegistry', 'Configuration'] 
+__all__ = []

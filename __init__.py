@@ -1,1 +1,1 @@
-"""Basic Orchestrator Agent Personality package.""" 
+"""Basic Orchestrator Agent Personality package."""

@@ -1,8 +1,10 @@
 """
-Template Agent Package
+Template Agent source package.
 
-This package provides a template for creating specialized agents that can be used as sub-graphs
-in the orchestrator system.
+This package contains the core implementation of the template agent.
 """
 
-__all__ = [] 
+from .main import run_with_interface
+from .main_cli import run_with_cli_interface
+
+__all__ = ["run_with_interface", "run_with_cli_interface"]

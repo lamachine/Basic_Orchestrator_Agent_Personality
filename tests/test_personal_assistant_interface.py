@@ -5,46 +5,52 @@ These tests validate the standardized interface between the orchestrator
 and the personal assistant tool.
 """
 
-import pytest
-import os
 import json
+import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+from typing import Any, Dict, List, Optional, Union
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List, Union
 
 # Import models needed for the tool interface
 # Note: We will need to create or update these when implementing the interface
 try:
-    from src.sub_graphs.personal_assistant_agent.personal_assistant_tool import PersonalAssistantTool
+    from src.sub_graphs.personal_assistant_agent.personal_assistant_tool import (
+        PersonalAssistantTool,
+    )
+
     TOOL_IMPORTED = True
 except ImportError:
     TOOL_IMPORTED = False
+
     # Mock class for testing when the real one doesn't exist yet
     class PersonalAssistantTool(BaseModel):
         name: str = "personal_assistant"
         description: str = "Handles messages, emails, calendar, and tasks"
-        
+
         async def execute(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 "status": "success",
                 "message": "Mock response from personal assistant",
-                "data": parameters
+                "data": parameters,
             }
 
 
 # Test standard message format
 class ToolRequest(BaseModel):
     """Standard tool request format from orchestrator to tool."""
+
     tool_name: str
-    task_id: str  
+    task_id: str
     parameters: Dict[str, Any]
     timestamp: Optional[str] = None
 
 
 class ToolResponse(BaseModel):
     """Standard tool response format from tool to orchestrator."""
+
     status: str  # "success", "error", "in_progress"
     message: str
     data: Optional[Dict[str, Any]] = None
@@ -59,34 +65,32 @@ def sample_tool_request():
     return ToolRequest(
         tool_name="personal_assistant",
         task_id="test-123",
-        parameters={
-            "action": "read_tasks",
-            "filter": "today"
-        }
+        parameters={"action": "read_tasks", "filter": "today"},
     )
 
 
 @pytest.fixture
 def mock_tool_interface():
     """Create a mock tool interface for testing."""
+
     # This mimics what would be at root level in personal_assistant_agent folder
     class MockPersonalAssistantInterface(BaseModel):
         name: str = "personal_assistant"
         description: str = "Handles messages, emails, calendar, and tasks"
         version: str = "0.1.0"
-        
+
         async def execute(self, task_id: str, parameters: Dict[str, Any]) -> ToolResponse:
             """Execute a task with the personal assistant."""
             print(f"DEBUG: Executing task {task_id} with parameters {parameters}")
-            
+
             return ToolResponse(
                 status="success",
                 message="Task executed successfully",
                 data={"result": "Tasks for today: 1. Test the interface"},
                 task_id=task_id,
-                tool_name=self.name
+                tool_name=self.name,
             )
-    
+
     return MockPersonalAssistantInterface()
 
 
@@ -96,10 +100,9 @@ async def test_tool_interface_basic_execution(mock_tool_interface, sample_tool_r
     """Test the basic execution of a tool request."""
     # Act
     response = await mock_tool_interface.execute(
-        task_id=sample_tool_request.task_id,
-        parameters=sample_tool_request.parameters
+        task_id=sample_tool_request.task_id, parameters=sample_tool_request.parameters
     )
-    
+
     # Assert
     assert response.status == "success"
     assert response.task_id == sample_tool_request.task_id
@@ -116,15 +119,13 @@ async def test_tool_interface_with_invalid_parameters():
     # Only run this test if the actual tool is available
     if not TOOL_IMPORTED:
         pytest.skip("Actual tool implementation not available yet")
-    
+
     # Arrange
     tool = PersonalAssistantTool()
-    
+
     # Act & Assert - this should raise an exception for invalid parameters
     with pytest.raises(Exception):
-        await tool.execute({
-            "invalid_param": "This shouldn't work"
-        })
+        await tool.execute({"invalid_param": "This shouldn't work"})
 
 
 # Edge cases
@@ -132,11 +133,8 @@ async def test_tool_interface_with_invalid_parameters():
 async def test_tool_interface_with_empty_parameters(mock_tool_interface):
     """Test the tool interface with empty parameters."""
     # Act
-    response = await mock_tool_interface.execute(
-        task_id="test-empty",
-        parameters={}
-    )
-    
+    response = await mock_tool_interface.execute(task_id="test-empty", parameters={})
+
     # Assert - should still return a valid response
     assert response.status in ["success", "error"]  # Either is valid
     assert response.task_id == "test-empty"
@@ -146,27 +144,25 @@ async def test_tool_interface_with_empty_parameters(mock_tool_interface):
 @pytest.mark.asyncio
 async def test_tool_interface_message_format():
     """Test that the response adheres to the standard message format."""
+
     # Arrange
     class MinimalToolInterface(BaseModel):
         name: str = "test_tool"
-        
+
         async def execute(self, task_id: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
             """Return a dictionary instead of a ToolResponse."""
-            return {
-                "status": "success",
-                "message": "Raw dictionary response"
-            }
-    
+            return {"status": "success", "message": "Raw dictionary response"}
+
     tool = MinimalToolInterface()
-    
+
     # Act
     response = await tool.execute(task_id="test-format", parameters={})
-    
+
     # Assert - even with raw dict, should have required fields
     assert "status" in response
     assert "message" in response
     assert response["status"] in ["success", "error", "in_progress"]
-    
+
     # Convert to ToolResponse to verify format compatibility
     try:
         formatted = ToolResponse(**response)
@@ -184,4 +180,4 @@ def test_tool_not_yet_implemented():
 
 
 if __name__ == "__main__":
-    pytest.main(["-v", __file__]) 
+    pytest.main(["-v", __file__])

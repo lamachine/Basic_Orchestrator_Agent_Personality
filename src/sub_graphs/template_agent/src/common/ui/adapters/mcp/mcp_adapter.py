@@ -5,20 +5,21 @@ This module provides the MCP adapter implementation for the template agent.
 It handles communication between the template agent and MCP-based systems.
 """
 
-from typing import Dict, Any, Optional, List, Set, Union
-import logging
 import asyncio
 import json
-import uuid
-import time
-from datetime import datetime
+import logging
 import os
+import time
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set, Union
+
 import aiohttp
 import sseclient
 
-from ..base_interface import BaseInterface
-from ..state.state_models import Message, MessageRole, MessageType, MessageStatus
-from src.sub_graphs.template_agent.src.common.services.logging_service import get_logger
+from ....services.logging_service import get_logger
+from ....state.state_models import Message, MessageRole, MessageStatus, MessageType
+from ...base_interface import BaseInterface
 
 logger = get_logger(__name__)
 
@@ -38,16 +39,17 @@ MCP_ERROR_CODES = {
     -32003: "Invalid tool",
     -32004: "Tool not found",
     -32005: "Invalid prompt",
-    -32006: "Prompt not found"
+    -32006: "Prompt not found",
 }
+
 
 class MCPAdapter(BaseInterface):
     """MCP adapter for template agent communication."""
-    
+
     def __init__(self, config: Dict[str, Any] = None):
         """
         Initialize the MCP adapter.
-        
+
         Args:
             config: Optional configuration dictionary
         """
@@ -59,7 +61,7 @@ class MCPAdapter(BaseInterface):
         self._sse_client = None
         self._http_session = None
         self._setup_mcp()
-    
+
     def _setup_mcp(self):
         """Set up MCP connection and configuration."""
         try:
@@ -67,32 +69,24 @@ class MCPAdapter(BaseInterface):
             self.config = {
                 "endpoints": {
                     "sse": os.getenv("MCP_SSE_ENDPOINT", "http://localhost:8080/events"),
-                    "http": os.getenv("MCP_HTTP_ENDPOINT", "http://localhost:8080/api")
+                    "http": os.getenv("MCP_HTTP_ENDPOINT", "http://localhost:8080/api"),
                 },
                 "timeout": 30,  # Default timeout in seconds
                 "transport": os.getenv("MCP_TRANSPORT", "sse"),  # Default to SSE transport
                 "protocol_version": MCP_PROTOCOL_VERSION,
                 "capabilities": {
-                    "resources": {
-                        "listChanged": True
-                    },
-                    "tools": {
-                        "listChanged": True
-                    },
-                    "prompts": {
-                        "listChanged": True
-                    },
-                    "logging": {
-                        "enabled": True
-                    }
-                }
+                    "resources": {"listChanged": True},
+                    "tools": {"listChanged": True},
+                    "prompts": {"listChanged": True},
+                    "logging": {"enabled": True},
+                },
             }
             logger.debug("Setting up MCP connection")
             self.running = True
         except Exception as e:
             logger.error(f"Error setting up MCP: {e}")
             raise
-    
+
     async def start(self) -> None:
         """Start the MCP adapter and tool checker."""
         try:
@@ -101,7 +95,7 @@ class MCPAdapter(BaseInterface):
                 await self._setup_sse()
             else:
                 await self._setup_stdio()
-            
+
             # Start the tool checker as a background task
             self._tool_checker_task = asyncio.create_task(self._check_tool_completions())
             await self._main_loop()
@@ -112,7 +106,7 @@ class MCPAdapter(BaseInterface):
                     await self._tool_checker_task
                 except asyncio.CancelledError:
                     pass
-    
+
     async def _setup_sse(self):
         """Set up SSE transport."""
         try:
@@ -121,8 +115,8 @@ class MCPAdapter(BaseInterface):
                 self.config["endpoints"]["sse"],
                 headers={
                     "Accept": "text/event-stream, application/json",
-                    "Content-Type": "application/json"
-                }
+                    "Content-Type": "application/json",
+                },
             ) as response:
                 if response.status != 200:
                     raise Exception(f"SSE connection failed: {response.status}")
@@ -131,7 +125,7 @@ class MCPAdapter(BaseInterface):
         except Exception as e:
             logger.error(f"Error setting up SSE transport: {e}")
             raise
-    
+
     async def _setup_stdio(self):
         """Set up stdio transport."""
         try:
@@ -140,7 +134,7 @@ class MCPAdapter(BaseInterface):
         except Exception as e:
             logger.error(f"Error setting up stdio transport: {e}")
             raise
-    
+
     def stop(self) -> None:
         """Stop the MCP adapter."""
         self.running = False
@@ -150,7 +144,7 @@ class MCPAdapter(BaseInterface):
             self._sse_client.close()
         if self._http_session:
             asyncio.create_task(self._http_session.close())
-    
+
     async def _check_tool_completions(self) -> None:
         """
         Background task that checks for completed tools and processes their results.
@@ -164,47 +158,47 @@ class MCPAdapter(BaseInterface):
                         # Process completed request
                         result = request.get("result", {})
                         error = request.get("error")
-                        
+
                         if error:
                             logger.error(f"MCP request {task_id} failed: {error}")
                         else:
                             logger.debug(f"MCP request {task_id} completed: {result}")
-                            
+
                         # Mark as displayed
                         self.displayed_tools.add(task_id)
-                        
+
                         # If agent has a tool completion handler, call it
                         if hasattr(self.agent, "handle_tool_completion"):
                             await self.agent.handle_tool_completion(task_id, result)
-                
+
                 await asyncio.sleep(self.tool_check_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in tool checker: {e}", exc_info=True)
                 await asyncio.sleep(1.0)  # Wait longer on error
-    
+
     async def send_message(self, message: Message) -> bool:
         """
         Send a message through the MCP adapter.
-        
+
         Args:
             message: Message to send
-            
+
         Returns:
             bool: True if message was sent successfully
         """
         try:
             # Generate task ID for tracking
             task_id = str(uuid.uuid4())
-            
+
             # Initialize pending request
             PENDING_MCP_REQUESTS[task_id] = {
                 "task_id": task_id,
                 "status": "pending",
-                "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
-            
+
             # Format message as MCP request
             mcp_request = {
                 "jsonrpc": "2.0",
@@ -217,13 +211,13 @@ class MCPAdapter(BaseInterface):
                     "metadata": {
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "mcp_message",
-                        "session_id": getattr(self.agent, 'session_id', None),
+                        "session_id": getattr(self.agent, "session_id", None),
                         "interface": "mcp",
-                        "protocol_version": self.config["protocol_version"]
-                    }
-                }
+                        "protocol_version": self.config["protocol_version"],
+                    },
+                },
             }
-            
+
             # Send based on transport type
             if self.config["transport"] == "sse":
                 # Send via HTTP POST
@@ -232,8 +226,8 @@ class MCPAdapter(BaseInterface):
                     json=mcp_request,
                     headers={
                         "Accept": "application/json",
-                        "Content-Type": "application/json"
-                    }
+                        "Content-Type": "application/json",
+                    },
                 ) as response:
                     if response.status != 200:
                         raise Exception(f"HTTP request failed: {response.status}")
@@ -244,31 +238,34 @@ class MCPAdapter(BaseInterface):
                 # Send via stdio
                 print(json.dumps(mcp_request))
                 PENDING_MCP_REQUESTS[task_id]["status"] = "pending"
-            
+
             # Add message to conversation state if available
-            if hasattr(self.agent, 'graph_state') and "conversation_state" in self.agent.graph_state:
+            if (
+                hasattr(self.agent, "graph_state")
+                and "conversation_state" in self.agent.graph_state
+            ):
                 await self.agent.graph_state["conversation_state"].add_message(
                     message.role,
                     message.content,
                     metadata={
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "mcp_message",
-                        "session_id": getattr(self.agent, 'session_id', None),
+                        "session_id": getattr(self.agent, "session_id", None),
                         "interface": "mcp",
-                        "protocol_version": self.config["protocol_version"]
+                        "protocol_version": self.config["protocol_version"],
                     },
-                    sender='mcp_adapter',
-                    target='template_agent'
+                    sender="mcp_adapter",
+                    target="template_agent",
                 )
             return True
         except Exception as e:
             logger.error(f"Error sending message through MCP: {e}")
             return False
-    
+
     async def receive_message(self) -> Optional[Message]:
         """
         Receive a message through the MCP adapter.
-        
+
         Returns:
             Optional[Message]: Received message or None if no message available
         """
@@ -302,19 +299,19 @@ class MCPAdapter(BaseInterface):
                         return self._parse_mcp_message(message_data)
                 except json.JSONDecodeError:
                     logger.error(f"Invalid JSON in stdio: {line}")
-            
+
             return None
         except Exception as e:
             logger.error(f"Error receiving message through MCP: {e}")
             return None
-    
+
     def _parse_mcp_message(self, message_data: Dict[str, Any]) -> Optional[Message]:
         """
         Parse an MCP message into a Message object.
-        
+
         Args:
             message_data: The MCP message data
-            
+
         Returns:
             Optional[Message]: Parsed message or None if invalid
         """
@@ -324,13 +321,13 @@ class MCPAdapter(BaseInterface):
                     content=message_data["params"]["content"],
                     role=MessageRole(message_data["params"]["role"]),
                     type=MessageType(message_data["params"]["type"]),
-                    metadata=message_data["params"]["metadata"]
+                    metadata=message_data["params"]["metadata"],
                 )
             return None
         except Exception as e:
             logger.error(f"Error parsing MCP message: {e}")
             return None
-    
+
     async def close(self):
         """Close the MCP connection."""
         try:
@@ -338,16 +335,16 @@ class MCPAdapter(BaseInterface):
             logger.debug("Closing MCP connection")
         except Exception as e:
             logger.error(f"Error closing MCP connection: {e}")
-    
+
     def is_connected(self) -> bool:
         """
         Check if the MCP connection is active.
-        
+
         Returns:
             bool: True if connected
         """
         return self.running
-    
+
     async def _main_loop(self) -> None:
         """Run the main message processing loop."""
         while self.running:
@@ -359,11 +356,11 @@ class MCPAdapter(BaseInterface):
             except Exception as e:
                 logger.error(f"Error in main loop: {e}", exc_info=True)
                 await asyncio.sleep(1.0)  # Wait longer on error
-    
+
     async def process_message(self, message: Message) -> None:
         """
         Process a received message.
-        
+
         Args:
             message: The message to process
         """
@@ -374,12 +371,14 @@ class MCPAdapter(BaseInterface):
                 if hasattr(self.agent, "handle_tool_request"):
                     result = await self.agent.handle_tool_request(message)
                     # Send result back
-                    await self.send_message(Message(
-                        content=json.dumps(result),
-                        role=MessageRole.ASSISTANT,
-                        type=MessageType.TOOL_RESPONSE,
-                        metadata=message.metadata
-                    ))
+                    await self.send_message(
+                        Message(
+                            content=json.dumps(result),
+                            role=MessageRole.ASSISTANT,
+                            type=MessageType.TOOL_RESPONSE,
+                            metadata=message.metadata,
+                        )
+                    )
             elif message.type == MessageType.COMMAND:
                 # Handle command
                 if hasattr(self.agent, "handle_command"):
@@ -387,6 +386,6 @@ class MCPAdapter(BaseInterface):
             else:
                 # Handle regular message
                 logger.debug(f"Processing MCP message: {message}")
-                
+
         except Exception as e:
-            logger.error(f"Error processing message: {e}") 
+            logger.error(f"Error processing message: {e}")

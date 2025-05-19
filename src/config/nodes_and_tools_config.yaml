@@ -12,9 +12,9 @@ enabled_tools:
 tool_settings:
   # Maximum time in seconds to wait for a tool response
   timeout_seconds: 30
-  
+
   # Whether to log tool executions for debugging
   log_executions: true
-  
+
   # Default response format
-  default_response_format: "json" 
+  default_response_format: "json"

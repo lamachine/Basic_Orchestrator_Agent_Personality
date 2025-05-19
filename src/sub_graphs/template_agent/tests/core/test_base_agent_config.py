@@ -3,7 +3,9 @@ Tests for BaseAgentConfig.
 """
 
 import pytest
+
 from src.common.agents.base_agent import BaseAgentConfig
+
 
 def test_base_agent_config_defaults():
     """Test BaseAgentConfig with default values."""
@@ -19,6 +21,7 @@ def test_base_agent_config_defaults():
     assert config.enable_logging is True
     assert config.graph_name == "unknown"
 
+
 def test_base_agent_config_custom():
     """Test BaseAgentConfig with custom values."""
     config = BaseAgentConfig(
@@ -31,7 +34,7 @@ def test_base_agent_config_custom():
         user_id="test_user",
         enable_history=False,
         enable_logging=False,
-        graph_name="test_graph"
+        graph_name="test_graph",
     )
     assert config.name == "test_agent"
     assert config.prompt_section == "test_prompt"
@@ -44,6 +47,7 @@ def test_base_agent_config_custom():
     assert config.enable_logging is False
     assert config.graph_name == "test_graph"
 
+
 def test_base_agent_config_validation():
     """Test BaseAgentConfig validation."""
     with pytest.raises(ValueError):
@@ -52,12 +56,9 @@ def test_base_agent_config_validation():
     with pytest.raises(ValueError):
         BaseAgentConfig(name="")  # name cannot be empty
 
+
 def test_base_agent_config_optional_fields():
     """Test BaseAgentConfig optional fields."""
-    config = BaseAgentConfig(
-        name="test_agent",
-        api_url=None,
-        model=None
-    )
+    config = BaseAgentConfig(name="test_agent", api_url=None, model=None)
     assert config.api_url is None
-    assert config.model is None 
+    assert config.model is None

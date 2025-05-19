@@ -16,13 +16,17 @@ THEN finish the template
 - test the entire stack again
 """
 
-from typing import Dict, Any, Optional
+import asyncio
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from src.services.logging_service import get_logger
 from src.state.state_manager import StateManager
 from src.state.state_models import MessageRole
-from src.services.logging_service import get_logger
-import asyncio
-from src.sub_graphs.personal_assistant_agent.src.tools.personal_assistant_tool import EMAIL_TOOL, TASKS_TOOL
+from src.sub_graphs.personal_assistant_agent.src.tools.personal_assistant_tool import (
+    EMAIL_TOOL,
+    TASKS_TOOL,
+)
 
 logger = get_logger(__name__)
 
@@ -35,63 +39,69 @@ logger = get_logger(__name__)
 #     ...
 # }
 
+
 # Placeholder for personality logic (not used in sub-graph, but structure is here)
 def apply_personality(message: str, personality: Optional[str] = None) -> str:
     # In a sub-graph, personality is not applied, but this function is here for compatibility
     return message
 
-async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str, Any]) -> Dict[str, Any]:
+
+async def personal_assistant_graph(
+    state: Dict[str, Any], tool_request: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Process a tool request in the personal assistant sub-graph.
     Responds in standard JSON tool format and uses state messaging.
     Handles 'tasks' and 'email' tools, and dummy fallback for others.
     """
     try:
-        session_id = state.get('session_id', 'personal_assistant')
+        session_id = state.get("session_id", "personal_assistant")
         state_manager = StateManager()
-        request_id = tool_request.get('request_id', f"req-{datetime.now().strftime('%Y%m%d%H%M%S%f')}")
-        tool_name = tool_request.get('tool', tool_request.get('name', 'unknown'))
-        args = tool_request.get('args', {})
-        args['task'] = tool_request.get('task', args.get('task', ''))
+        request_id = tool_request.get(
+            "request_id", f"req-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        )
+        tool_name = tool_request.get("tool", tool_request.get("name", "unknown"))
+        args = tool_request.get("args", {})
+        args["task"] = tool_request.get("task", args.get("task", ""))
         # Route to the correct tool
-        if tool_name == 'tasks':
+        if tool_name == "tasks":
             result = await TASKS_TOOL.execute(args)
             await state_manager.update_session(
                 session_id=session_id,
                 role=MessageRole.SYSTEM,
                 content=result.get("message", str(result)),
-                metadata=result
+                metadata=result,
             )
             return result
-        if tool_name == 'email':
+        if tool_name == "email":
             result = await EMAIL_TOOL.execute(args)
             await state_manager.update_session(
                 session_id=session_id,
                 role=MessageRole.SYSTEM,
                 content=result.get("message", str(result)),
-                metadata=result
+                metadata=result,
             )
             return result
         # Dummy tool: fallback for unknown tools
         # Simulate async status update if requested
-        if tool_request.get('action') == 'status' or tool_request.get('status_request'):
+        if tool_request.get("action") == "status" or tool_request.get("status_request"):
             status_msg = {
                 "type": "status",
                 "status": "in_progress",
                 "tool": tool_name,
                 "request_id": request_id,
                 "message": f"Task '{args['task']}' is in progress.",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             await state_manager.update_session(
                 session_id=session_id,
                 role=MessageRole.SYSTEM,
                 content=status_msg["message"],
-                metadata=status_msg
+                metadata=status_msg,
             )
             return status_msg
         # Simulate error if requested
-        if tool_request.get('action') == 'error':
+        if tool_request.get("action") == "error":
             error_msg = {
                 "type": "error",
                 "status": "error",
@@ -99,13 +109,13 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
                 "request_id": request_id,
                 "message": f"Error processing task '{args['task']}'.",
                 "details": {"reason": "Dummy error for testing."},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             await state_manager.update_session(
                 session_id=session_id,
                 role=MessageRole.SYSTEM,
                 content=error_msg["message"],
-                metadata=error_msg
+                metadata=error_msg,
             )
             return error_msg
         # Simulate result (success)
@@ -116,27 +126,28 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
             "tool": tool_name,
             "request_id": request_id,
             "message": f"Task '{args['task']}' completed successfully.",
-            "data": {"task": args['task'], "result": "Dummy result for testing."},
-            "timestamp": datetime.now().isoformat()
+            "data": {"task": args["task"], "result": "Dummy result for testing."},
+            "timestamp": datetime.now().isoformat(),
         }
         await state_manager.update_session(
             session_id=session_id,
             role=MessageRole.SYSTEM,
             content=result_msg["message"],
-            metadata=result_msg
+            metadata=result_msg,
         )
         return result_msg
     except Exception as e:
         error_msg = {
             "type": "error",
             "status": "error",
-            "tool": tool_request.get('tool', 'unknown'),
-            "request_id": tool_request.get('request_id'),
+            "tool": tool_request.get("tool", "unknown"),
+            "request_id": tool_request.get("request_id"),
             "message": f"Exception in personal_assistant_graph: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         logger.error(error_msg["message"])
         return error_msg
+
 
 # --- Legacy/Advanced sub-graph logic (commented out for now, to be refactored/restored) ---
 #         # --- Sub-graph (sub-agent) auto-instantiation and approval ---
@@ -211,4 +222,4 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
 #                 "target": "personal_assistant.sub_graph_interface"
 #             }
 #         )
-#         return result 
+#         return result

@@ -4,54 +4,69 @@ Session Manager Module
 This module implements a session manager for handling user sessions and conversation history.
 """
 
-from typing import Dict, List, Any, Optional, Union
-from datetime import datetime, timedelta
-from pydantic import BaseModel, Field
-from pathlib import Path
-from uuid import uuid4
 import asyncio
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+from uuid import uuid4
 
-from .base_manager import BaseManager, ManagerState
+from pydantic import BaseModel, Field
+
+from ..config.base_config import SessionConfig, load_config
 from ..services.session_service import SessionService
-from .state_models import Message, MessageType, MessageStatus
-from .service_models import SessionServiceConfig
+from ..state.state_models import Message, MessageStatus, MessageType
+from .base_manager import BaseManager, ManagerState
+
+
+class SessionStats(BaseModel):
+    """Track session statistics."""
+
+    total_sessions: int = 0
+    active_sessions: int = 0
+    expired_sessions: int = 0
+    last_cleanup: Optional[datetime] = None
+    session_history: List[Dict[str, Any]] = Field(default_factory=list)
+
 
 class SessionState(ManagerState):
     """State model for session management."""
-    session_id: Optional[str] = None
-    name: Optional[str] = None
-    user_id: str = "developer"
-    messages: List[Dict[str, Any]] = Field(default_factory=list)
-    active: bool = True
 
-class SessionManager(BaseManager):
+    current_session: Optional[Dict[str, Any]] = None
+    session_locks: Dict[str, asyncio.Lock] = Field(default_factory=dict)
+    stats: SessionStats = Field(default_factory=SessionStats)
+
+
+class SessionManager(BaseManager[SessionConfig, SessionState]):
     """Manager for handling user sessions and conversation history."""
-    
-    def __init__(self, config: SessionServiceConfig):
+
+    def __init__(self, config: Optional[SessionConfig] = None):
         """Initialize the session manager.
-        
+
         Args:
-            config: Session service configuration
+            config: Optional session configuration. If not provided, loads from base_config.yaml
         """
+        if config is None:
+            config = load_config("base_config.yaml").session
         super().__init__(config)
-        self.session_timeout = config.session_timeout
-        self.max_sessions = config.max_sessions
-        self.cleanup_interval = config.cleanup_interval
-        self._sessions: Dict[str, Dict[str, Any]] = {}
-        self.current_session: Optional[SessionState] = None
-        self._session_locks: Dict[str, asyncio.Lock] = {}
+        self.service = SessionService(config)
+        self._cleanup_task = None
 
     async def initialize(self) -> None:
         """Initialize the session manager."""
         await super().initialize()
-        # Start cleanup task
-        asyncio.create_task(self._cleanup_task())
+        # Start cleanup task if auto_cleanup is enabled
+        if self.config.auto_cleanup:
+            self._cleanup_task = asyncio.create_task(self._cleanup_task())
 
     async def cleanup(self) -> None:
         """Clean up resources."""
         # Cancel cleanup task
-        if hasattr(self, '_cleanup_task'):
+        if self._cleanup_task:
             self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
         await super().cleanup()
 
     async def _cleanup_task(self) -> None:
@@ -59,7 +74,7 @@ class SessionManager(BaseManager):
         while True:
             try:
                 await self.cleanup_expired_sessions()
-                await asyncio.sleep(self.cleanup_interval)
+                await asyncio.sleep(self.config.cleanup_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -68,286 +83,181 @@ class SessionManager(BaseManager):
 
     def _get_session_lock(self, session_id: str) -> asyncio.Lock:
         """Get or create a lock for a session.
-        
+
         Args:
             session_id: Session ID
-            
+
         Returns:
             Lock for the session
         """
-        if session_id not in self._session_locks:
-            self._session_locks[session_id] = asyncio.Lock()
-        return self._session_locks[session_id]
+        if session_id not in self._state.session_locks:
+            self._state.session_locks[session_id] = asyncio.Lock()
+        return self._state.session_locks[session_id]
 
     @property
     def session_name(self) -> Optional[str]:
         """Get the current session name."""
-        return self.current_session.name if self.current_session else None
+        return self._state.current_session.get("name") if self._state.current_session else None
 
     @property
     def current_session_id(self) -> Optional[str]:
         """Get the current session ID."""
-        return self.current_session.session_id if self.current_session else None
-    
-    async def get_recent_sessions(self, limit: int = 10, user_id: str = "developer") -> List[Dict[str, Any]]:
-        """
-        Get recent sessions from the session service.
-        
+        return self._state.current_session.get("id") if self._state.current_session else None
+
+    async def get_recent_sessions(
+        self, limit: int = 10, user_id: str = "developer"
+    ) -> List[Dict[str, Any]]:
+        """Get recent sessions.
+
         Args:
             limit: Maximum number of sessions to return
             user_id: User ID to filter sessions
-            
+
         Returns:
             List of recent sessions
         """
         try:
-            return await self.session_service.get_recent_sessions(limit=limit, user_id=user_id)
+            sessions = await self.service.get_recent_sessions(limit=limit, user_id=user_id)
+            self._state.stats.total_sessions = len(sessions)
+            return sessions
         except Exception as e:
             self.logger.error(f"Error getting recent sessions: {e}")
             return []
 
-    async def create_session(self, 
-                           session_id: Optional[str] = None,
-                           metadata: Optional[Dict[str, Any]] = None) -> Message:
+    async def create_session(self, name: str, user_id: str = "developer") -> Dict[str, Any]:
         """Create a new session.
-        
+
         Args:
-            session_id: Optional session ID
-            metadata: Optional session metadata
-            
+            name: Session name
+            user_id: User ID
+
         Returns:
-            Message containing the session info
+            Created session data
         """
         try:
-            # Check if we've hit the session limit
-            if len(self._sessions) >= self.max_sessions:
-                error_msg = self.create_error_message(
-                    content="Maximum number of sessions reached",
-                    error_data={"max_sessions": self.max_sessions}
-                )
-                self.update_state(error_msg)
-                return error_msg
-
-            # Create session
-            session_id = session_id or str(uuid4())
-            session = {
-                "id": session_id,
-                "created_at": datetime.now(),
-                "last_active": datetime.now(),
-                "metadata": metadata or {},
-                "messages": []
-            }
-
-            # Use lock for session creation
-            async with self._get_session_lock(session_id):
-                self._sessions[session_id] = session
-
-                # Create success message
-                message = self.create_message(
-                    content=f"Session {session_id} created",
-                    message_type=MessageType.RESPONSE,
-                    status=MessageStatus.SUCCESS,
-                    data={"session": session}
-                )
-                self.update_state(message)
-
-                # Update current session state
-                self.current_session = SessionState(
-                    session_id=str(session_id),
-                    name=metadata.get('name'),
-                    user_id=metadata.get('user_id', "developer"),
-                    messages=session.get('messages', [])
-                )
-                
-                # Ensure agent's graph_state has the correct MessageState
-                if hasattr(self, 'agent') and self.agent:
-                    if not hasattr(self.agent, 'graph_state'):
-                        self.agent.graph_state = {}
-                    self.agent.graph_state['conversation_state'] = MessageState(
-                        session_id=int(session_id),
-                        db_manager=self.session_service.db_service
-                    )
-                    self.logger.debug(f"Initialized session state in agent's graph_state for session ID: {session_id}")
-                
-                return message
-
+            session = await self.service.create_session(name=name, user_id=user_id)
+            self._state.current_session = session
+            self._state.stats.active_sessions += 1
+            return session
         except Exception as e:
-            error_msg = self.create_error_message(
-                content=f"Error creating session: {str(e)}",
-                error_data={"error": str(e)}
-            )
-            self.update_state(error_msg)
-            return error_msg
+            self.logger.error(f"Error creating session: {e}")
+            raise
 
-    async def get_session(self, session_id: str) -> Message:
-        """Get session information.
-        
+    async def continue_session(self, session_id: str) -> Dict[str, Any]:
+        """Continue an existing session.
+
         Args:
             session_id: Session ID
-            
+
         Returns:
-            Message containing the session info
+            Session data
         """
         try:
-            async with self._get_session_lock(session_id):
-                if session_id not in self._sessions:
-                    error_msg = self.create_error_message(
-                        content=f"Session {session_id} not found",
-                        error_data={"session_id": session_id}
-                    )
-                    self.update_state(error_msg)
-                    return error_msg
-
-                session = self._sessions[session_id]
-                session["last_active"] = datetime.now()
-
-                message = self.create_message(
-                    content=f"Retrieved session {session_id}",
-                    message_type=MessageType.RESPONSE,
-                    status=MessageStatus.SUCCESS,
-                    data={"session": session}
-                )
-                self.update_state(message)
-                return message
-
+            session = await self.service.get_session(session_id)
+            self._state.current_session = session
+            return session
         except Exception as e:
-            error_msg = self.create_error_message(
-                content=f"Error getting session: {str(e)}",
-                error_data={"error": str(e)}
-            )
-            self.update_state(error_msg)
-            return error_msg
+            self.logger.error(f"Error continuing session: {e}")
+            raise
 
-    async def update_session(self,
-                           session_id: str,
-                           updates: Dict[str, Any]) -> Message:
-        """Update session information.
-        
+    async def get_session(self, session_id: str) -> Dict[str, Any]:
+        """Get session data.
+
         Args:
             session_id: Session ID
-            updates: Dictionary of updates
-            
+
         Returns:
-            Message containing the updated session info
+            Session data
         """
         try:
-            async with self._get_session_lock(session_id):
-                if session_id not in self._sessions:
-                    error_msg = self.create_error_message(
-                        content=f"Session {session_id} not found",
-                        error_data={"session_id": session_id}
-                    )
-                    self.update_state(error_msg)
-                    return error_msg
-
-                session = self._sessions[session_id]
-                session.update(updates)
-                session["last_active"] = datetime.now()
-
-                message = self.create_message(
-                    content=f"Updated session {session_id}",
-                    message_type=MessageType.RESPONSE,
-                    status=MessageStatus.SUCCESS,
-                    data={"session": session}
-                )
-                self.update_state(message)
-                return message
-
+            return await self.service.get_session(session_id)
         except Exception as e:
-            error_msg = self.create_error_message(
-                content=f"Error updating session: {str(e)}",
-                error_data={"error": str(e)}
-            )
-            self.update_state(error_msg)
-            return error_msg
+            self.logger.error(f"Error getting session: {e}")
+            raise
 
-    async def delete_session(self, session_id: str) -> Message:
+    async def search_sessions(self, query: str, user_id: str = "developer") -> List[Dict[str, Any]]:
+        """Search sessions.
+
+        Args:
+            query: Search query
+            user_id: User ID to filter sessions
+
+        Returns:
+            List of matching sessions
+        """
+        try:
+            return await self.service.search_sessions(query=query, user_id=user_id)
+        except Exception as e:
+            self.logger.error(f"Error searching sessions: {e}")
+            return []
+
+    async def rename_session(self, session_id: str, new_name: str) -> Dict[str, Any]:
+        """Rename a session.
+
+        Args:
+            session_id: Session ID
+            new_name: New session name
+
+        Returns:
+            Updated session data
+        """
+        try:
+            session = await self.service.rename_session(session_id=session_id, new_name=new_name)
+            if self._state.current_session and self._state.current_session.get("id") == session_id:
+                self._state.current_session = session
+            return session
+        except Exception as e:
+            self.logger.error(f"Error renaming session: {e}")
+            raise
+
+    async def end_session(self, session_id: str) -> None:
+        """End a session.
+
+        Args:
+            session_id: Session ID
+        """
+        try:
+            await self.service.end_session(session_id)
+            if self._state.current_session and self._state.current_session.get("id") == session_id:
+                self._state.current_session = None
+            self._state.stats.active_sessions -= 1
+        except Exception as e:
+            self.logger.error(f"Error ending session: {e}")
+            raise
+
+    async def delete_session(self, session_id: str) -> None:
         """Delete a session.
-        
+
         Args:
             session_id: Session ID
-            
-        Returns:
-            Message confirming deletion
         """
         try:
-            async with self._get_session_lock(session_id):
-                if session_id not in self._sessions:
-                    error_msg = self.create_error_message(
-                        content=f"Session {session_id} not found",
-                        error_data={"session_id": session_id}
-                    )
-                    self.update_state(error_msg)
-                    return error_msg
-
-                del self._sessions[session_id]
-                del self._session_locks[session_id]
-
-                message = self.create_message(
-                    content=f"Deleted session {session_id}",
-                    message_type=MessageType.RESPONSE,
-                    status=MessageStatus.SUCCESS
-                )
-                self.update_state(message)
-                return message
-
+            await self.service.delete_session(session_id)
+            if self._state.current_session and self._state.current_session.get("id") == session_id:
+                self._state.current_session = None
+            self._state.stats.active_sessions -= 1
         except Exception as e:
-            error_msg = self.create_error_message(
-                content=f"Error deleting session: {str(e)}",
-                error_data={"error": str(e)}
-            )
-            self.update_state(error_msg)
-            return error_msg
+            self.logger.error(f"Error deleting session: {e}")
+            raise
 
-    async def cleanup_expired_sessions(self) -> Message:
-        """Clean up expired sessions.
-        
-        Returns:
-            Message containing cleanup results
-        """
+    async def cleanup_expired_sessions(self) -> None:
+        """Clean up expired sessions."""
         try:
-            now = datetime.now()
-            expired_sessions = []
-            
-            # Find expired sessions
-            for session_id, session in self._sessions.items():
-                last_active = session["last_active"]
-                if isinstance(last_active, str):
-                    last_active = datetime.fromisoformat(last_active)
-                if now - last_active > timedelta(seconds=self.session_timeout):
-                    expired_sessions.append(session_id)
-            
-            # Delete expired sessions
-            for session_id in expired_sessions:
-                async with self._get_session_lock(session_id):
-                    if session_id in self._sessions:
-                        del self._sessions[session_id]
-                        del self._session_locks[session_id]
-            
-            message = self.create_message(
-                content=f"Cleaned up {len(expired_sessions)} expired sessions",
-                message_type=MessageType.RESPONSE,
-                status=MessageStatus.SUCCESS,
-                data={"expired_sessions": expired_sessions}
-            )
-            self.update_state(message)
-            return message
-
+            expired = await self.service.cleanup_expired_sessions()
+            self._state.stats.expired_sessions += len(expired)
+            self._state.stats.active_sessions -= len(expired)
+            self._state.stats.last_cleanup = datetime.now()
         except Exception as e:
-            error_msg = self.create_error_message(
-                content=f"Error cleaning up sessions: {str(e)}",
-                error_data={"error": str(e)}
-            )
-            self.update_state(error_msg)
-            return error_msg
+            self.logger.error(f"Error cleaning up expired sessions: {e}")
+            raise
 
     async def persist_state(self) -> None:
         """Persist the current state."""
         try:
             # Persist all sessions
-            for session_id, session in self._sessions.items():
+            for session_id, session in self._state.sessions.items():
                 async with self._get_session_lock(session_id):
-                    await self.session_service.save_session(session)
+                    await self.service.save_session(session)
         except Exception as e:
             self.logger.error(f"Error persisting state: {e}")
 
@@ -355,10 +265,26 @@ class SessionManager(BaseManager):
         """Load state from storage."""
         try:
             # Load all sessions
-            sessions = await self.session_service.get_all_sessions()
+            sessions = await self.service.get_all_sessions()
             for session in sessions:
                 session_id = session["id"]
-                self._sessions[session_id] = session
-                self._session_locks[session_id] = asyncio.Lock()
+                self._state.sessions[session_id] = session
+                self._state.session_locks[session_id] = asyncio.Lock()
+                self._state.stats.active_sessions += 1
+                self._state.stats.total_sessions += 1
         except Exception as e:
-            self.logger.error(f"Error loading state: {e}") 
+            self.logger.error(f"Error loading state: {e}")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get session statistics.
+
+        Returns:
+            Dictionary of session statistics
+        """
+        return {
+            "total_sessions": self._state.stats.total_sessions,
+            "active_sessions": self._state.stats.active_sessions,
+            "expired_sessions": self._state.stats.expired_sessions,
+            "last_cleanup": self._state.stats.last_cleanup,
+            "session_history": self._state.stats.session_history[-100:],  # Keep last 100 entries
+        }

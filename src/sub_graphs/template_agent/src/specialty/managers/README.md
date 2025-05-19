@@ -31,4 +31,4 @@ class SpecialtyManager(BaseManager):
 3. Document any custom methods and properties
 4. Test manager functionality thoroughly
 5. Keep specialty logic separate from common functionality
-""" 
+"""

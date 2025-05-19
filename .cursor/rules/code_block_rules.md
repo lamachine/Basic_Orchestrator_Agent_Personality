@@ -36,4 +36,4 @@
 - Always verify file/directory exists before referencing
 - Show directory creation commands when needed
 - Provide clear context for where changes should be made
-- Use consistent indentation and formatting 
+- Use consistent indentation and formatting

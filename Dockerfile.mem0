@@ -19,4 +19,4 @@ ENV SUPABASE_KEY=""
 EXPOSE 8000
 
 # Run the service
-CMD ["python", "service.py", "--http", "--port", "8000"] 
+CMD ["python", "service.py", "--http", "--port", "8000"]

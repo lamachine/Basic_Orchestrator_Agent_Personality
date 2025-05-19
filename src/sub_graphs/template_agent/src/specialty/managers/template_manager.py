@@ -15,10 +15,11 @@ Example Patterns:
 4. Using multiple inheritance
 """
 
-from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
-from pydantic import BaseModel, Field
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field
 
 from ...common.managers.base_manager import BaseManager, ManagerState
 from ...common.managers.session_manager import SessionManager, SessionState
@@ -55,41 +56,46 @@ class ExtendedSessionManager(SessionManager):
             log_file=log_file,
             state_service=state_service
         )
-    
+
     async def specialty_action(self, action: str) -> None:
         # Implement specialty functionality
         pass
 ```
 """
 
+
 class ExtendedSessionState(SessionState):
     """
     Extended session state with additional fields.
-    
+
     This shows how to add new state fields to an existing manager.
     """
+
     # Add new fields specific to your specialty
     specialty_field: str = "default"
     specialty_count: int = 0
     last_specialty_action: Optional[datetime] = None
     specialty_metadata: Dict[str, Any] = Field(default_factory=dict)
 
+
 class ExtendedSessionManager(SessionManager):
     """
     Extended session manager with additional functionality.
-    
+
     This shows how to add new methods to an existing manager.
     """
-    
-    def __init__(self,
-                 session_service: Any,  # Replace with actual service type
-                 state: Optional[ExtendedSessionState] = None,
-                 log_level: Optional[int] = None,
-                 log_file: Optional[Path] = None,
-                 state_service: Optional[StateService] = None):
+
+    def __init__(
+        self,
+        session_service: Any,  # Replace with actual service type
+        state: Optional[ExtendedSessionState] = None,
+        log_level: Optional[int] = None,
+        log_file: Optional[Path] = None,
+        state_service: Optional[StateService] = None,
+    ):
         """
         Initialize the extended session manager.
-        
+
         Args:
             session_service: Session service instance
             state: Optional initial state
@@ -102,13 +108,13 @@ class ExtendedSessionManager(SessionManager):
             state=state or ExtendedSessionState(),
             log_level=log_level,
             log_file=log_file,
-            state_service=state_service
+            state_service=state_service,
         )
-        
+
     async def specialty_action(self, action: str) -> None:
         """
         Example of a new specialty method.
-        
+
         Args:
             action: Action to perform
         """
@@ -117,21 +123,21 @@ class ExtendedSessionManager(SessionManager):
             self.state.specialty_count += 1
             self.state.last_specialty_action = datetime.now()
             self.state.specialty_field = action
-            
+
             # Call parent method if needed
             # await super().some_parent_method()
-            
+
             # Persist state
             await self.persist_state()
-            
+
         except Exception as e:
             self.logger.error(f"Error performing specialty action: {e}")
             raise RuntimeError(f"Failed to perform specialty action: {e}")
-            
+
     async def get_specialty_stats(self) -> Dict[str, Any]:
         """
         Get specialty statistics.
-        
+
         Returns:
             Dictionary of specialty statistics
         """
@@ -139,8 +145,9 @@ class ExtendedSessionManager(SessionManager):
             "specialty_count": self.state.specialty_count,
             "last_action": self.state.last_specialty_action,
             "specialty_field": self.state.specialty_field,
-            "metadata": self.state.specialty_metadata
+            "metadata": self.state.specialty_metadata,
         }
+
 
 # Example 2: Creating a New Manager
 # -------------------------------
@@ -176,12 +183,14 @@ class CustomManager(BaseManager):
 ```
 """
 
+
 class CustomState(ManagerState):
     """
     Custom state for a new manager.
-    
+
     This shows how to create a completely new state model.
     """
+
     # Define your state fields
     custom_id: Optional[str] = None
     custom_name: str = "default"
@@ -189,22 +198,25 @@ class CustomState(ManagerState):
     custom_timestamp: Optional[datetime] = None
     custom_count: int = 0
 
+
 class CustomManager(BaseManager):
     """
     Custom manager implementation.
-    
+
     This shows how to create a completely new manager.
     """
-    
-    def __init__(self,
-                 custom_service: Any,  # Replace with actual service type
-                 state: Optional[CustomState] = None,
-                 log_level: Optional[int] = None,
-                 log_file: Optional[Path] = None,
-                 state_service: Optional[StateService] = None):
+
+    def __init__(
+        self,
+        custom_service: Any,  # Replace with actual service type
+        state: Optional[CustomState] = None,
+        log_level: Optional[int] = None,
+        log_file: Optional[Path] = None,
+        state_service: Optional[StateService] = None,
+    ):
         """
         Initialize the custom manager.
-        
+
         Args:
             custom_service: Custom service instance
             state: Optional initial state
@@ -216,20 +228,20 @@ class CustomManager(BaseManager):
             state=state or CustomState(),
             log_level=log_level,
             log_file=log_file,
-            state_service=state_service
+            state_service=state_service,
         )
         self.custom_service = custom_service
-        
+
     async def custom_method(self, param: str) -> Dict[str, Any]:
         """
         Example of a custom method.
-        
+
         Args:
             param: Parameter for the method
-            
+
         Returns:
             Result of the operation
-            
+
         Raises:
             RuntimeError: If operation fails
         """
@@ -238,26 +250,26 @@ class CustomManager(BaseManager):
             self.state.custom_count += 1
             self.state.custom_timestamp = datetime.now()
             self.state.custom_name = param
-            
+
             # Perform custom operation
             result = await self.custom_service.do_something(param)
-            
+
             # Update state with result
             self.state.custom_data.update(result)
-            
+
             # Persist state
             await self.persist_state()
-            
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error in custom method: {e}")
             raise RuntimeError(f"Failed to perform custom operation: {e}")
-            
+
     async def get_custom_info(self) -> Dict[str, Any]:
         """
         Get custom information.
-        
+
         Returns:
             Dictionary of custom information
         """
@@ -266,8 +278,9 @@ class CustomManager(BaseManager):
             "name": self.state.custom_name,
             "count": self.state.custom_count,
             "timestamp": self.state.custom_timestamp,
-            "data": self.state.custom_data
+            "data": self.state.custom_data,
         }
+
 
 # Example 3: Overriding Base Methods
 # --------------------------------
@@ -279,49 +292,51 @@ class OverrideManager(BaseManager):
     async def persist_state(self) -> None:
         # Implement custom persistence
         pass
-        
+
     async def load_state(self) -> None:
         # Implement custom loading
         pass
 ```
 """
 
+
 class OverrideManager(BaseManager):
     """
     Example of overriding base manager methods.
-    
+
     This shows how to completely override base functionality.
     """
-    
+
     async def persist_state(self) -> None:
         """
         Override persist_state with custom implementation.
-        
+
         This shows how to completely replace base functionality.
         """
         try:
             # Your custom persistence logic here
             # For example, using a different storage mechanism
             pass
-            
+
         except Exception as e:
             self.logger.error(f"Error in custom persistence: {e}")
             raise RuntimeError(f"Failed to persist state: {e}")
-            
+
     async def load_state(self) -> None:
         """
         Override load_state with custom implementation.
-        
+
         This shows how to completely replace base functionality.
         """
         try:
             # Your custom loading logic here
             # For example, loading from a different source
             pass
-            
+
         except Exception as e:
             self.logger.error(f"Error in custom loading: {e}")
             raise RuntimeError(f"Failed to load state: {e}")
+
 
 # Example 4: Using Multiple Inheritance
 # ----------------------------------
@@ -339,18 +354,23 @@ class MultiManager(BaseManager, SessionManager):
 ```
 """
 
+
 class MultiState(ManagerState):
     """State that combines multiple state types."""
+
     # Combine fields from different state types
     pass
+
 
 class MultiManager(BaseManager, SessionManager):
     """
     Example of multiple inheritance.
-    
+
     This shows how to combine functionality from multiple managers.
     """
-    pass 
+
+    pass
+
 
 # Best Practices
 # -------------
@@ -391,4 +411,4 @@ self.logger.info("General information")
 self.logger.warning("Warning message")
 self.logger.error("Error message")
 ```
-""" 
+"""

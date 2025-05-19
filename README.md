@@ -66,6 +66,7 @@ The system supports multiple interface types through the abstract `UserInterface
 ### Prerequisites
 
 - Python 3.10 or later
+- Node.js 18 or later (for mem0 integration)
 - Ollama running locally (or accessible via API)
 - PostgreSQL database (optional, for persistence)
 
@@ -77,15 +78,39 @@ The system supports multiple interface types through the abstract `UserInterface
    cd Basic_Orchestrator_Agent_Personality
    ```
 
-2. Install dependencies:
+2. Install Python dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Configure the system:
+3. Install Node.js dependencies:
+   ```bash
+   npm install
+   ```
+
+4. Configure the system:
    - Copy `.env.example` to `.env`
    - Update settings in `.env` for your environment
    - Edit `config/config.yaml` to customize the orchestrator and agents
+
+### Development Setup
+
+1. Install development dependencies and pre-commit hooks:
+   ```bash
+   python setup_dev.py
+   ```
+
+This will:
+- Install development dependencies (isort, black, mypy, flake8)
+- Install pre-commit hooks for code quality checks
+- Run initial code formatting and validation
+
+The development environment includes:
+- **Code Formatting**: Black for consistent code style
+- **Import Sorting**: isort for organized imports
+- **Type Checking**: mypy for static type analysis
+- **Linting**: flake8 for code quality checks
+- **Pre-commit Hooks**: Automated checks before commits
 
 ## Running the System
 
@@ -134,7 +159,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgements
 
-- Inspired by various agent frameworks in the LLM ecosystem 
+- Inspired by various agent frameworks in the LLM ecosystem
 
 ## Database Architecture
 
@@ -150,4 +175,4 @@ This architecture enables:
 - Better testability with mock objects
 - Consistent error handling
 
-See [Database Architecture](docs/database_architecture.md) for detailed documentation. 
+See [Database Architecture](docs/database_architecture.md) for detailed documentation.

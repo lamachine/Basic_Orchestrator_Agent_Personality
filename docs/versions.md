@@ -1,12 +1,12 @@
 # Version Control and File Restoration Checklist
 
-We want basic functionality back.  We need to keep the refactoring for the config, but back out the rest.  
-Pulling previous versions with 
-    x.py the most recent, 
+We want basic functionality back.  We need to keep the refactoring for the config, but back out the rest.
+Pulling previous versions with
+    x.py the most recent,
     x copy.py previous, Finished refactor of config
     x copy 2.py oldest. Finished update and debug
 
-We want to look for what was minimally functional, zen, and as simple as possible but no simpler.  
+We want to look for what was minimally functional, zen, and as simple as possible but no simpler.
 
 
 ## Core Files to Review and Restore
@@ -200,4 +200,4 @@ We want to look for what was minimally functional, zen, and as simple as possibl
 2. Documentation
    - [ ] Update PROJECT_PLAN.md
    - [ ] Update PROJECT_STATUS.md
-   - [ ] Update README.md 
+   - [ ] Update README.md

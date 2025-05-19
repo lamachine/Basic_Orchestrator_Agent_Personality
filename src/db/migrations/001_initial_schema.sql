@@ -75,17 +75,17 @@ CREATE POLICY "Enable read access for all users" ON public.messages FOR SELECT U
 CREATE POLICY "Enable read access for all users" ON public.tasks FOR SELECT USING (true);
 
 -- Insert policies
-CREATE POLICY "Enable insert for authenticated users" ON public.sessions 
+CREATE POLICY "Enable insert for authenticated users" ON public.sessions
     FOR INSERT WITH CHECK (true);
-CREATE POLICY "Enable insert for authenticated users" ON public.messages 
+CREATE POLICY "Enable insert for authenticated users" ON public.messages
     FOR INSERT WITH CHECK (true);
-CREATE POLICY "Enable insert for authenticated users" ON public.tasks 
+CREATE POLICY "Enable insert for authenticated users" ON public.tasks
     FOR INSERT WITH CHECK (true);
 
 -- Update policies
-CREATE POLICY "Enable update for session owners" ON public.sessions 
+CREATE POLICY "Enable update for session owners" ON public.sessions
     FOR UPDATE USING (true);
-CREATE POLICY "Enable update for message owners" ON public.messages 
+CREATE POLICY "Enable update for message owners" ON public.messages
     FOR UPDATE USING (true);
-CREATE POLICY "Enable update for task owners" ON public.tasks 
-    FOR UPDATE USING (true); 
+CREATE POLICY "Enable update for task owners" ON public.tasks
+    FOR UPDATE USING (true);

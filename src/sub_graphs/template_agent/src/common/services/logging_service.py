@@ -23,103 +23,132 @@ This is different from a manager which would:
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from ..models.service_models import LoggingServiceConfig
+from ..config.base_config import LoggingConfig
+
 
 class LoggingService:
     """Service for logging operations."""
-    
-    def __init__(self, config: LoggingServiceConfig):
-        """
-        Initialize logging service.
-        
+
+    def __init__(self, config: LoggingConfig):
+        """Initialize logging service.
+
         Args:
-            config: Logging service configuration
+            config: Logging configuration
         """
         self.config = config
         self._setup_logging()
-        
+
     def _setup_logging(self) -> None:
         """Setup logging configuration."""
-        # Get log format from config
-        log_format = self.config.get_merged_config().get(
-            "log_format",
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        
-        # Get log level from config
-        log_level = self.config.get_merged_config().get("log_level", "INFO")
-        level = getattr(logging, log_level.upper(), logging.INFO)
-        
-        # Setup root logger
+        # Configure root logger
         root_logger = logging.getLogger()
-        root_logger.setLevel(level)
-        
-        # Setup console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(logging.Formatter(log_format))
-        root_logger.addHandler(console_handler)
-        
-        # Setup file handler if log file specified
-        log_file = self.config.get_merged_config().get("log_file")
-        if log_file:
-            log_path = Path(log_file)
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            file_handler = logging.FileHandler(log_file)
-            file_handler.setFormatter(logging.Formatter(log_format))
+        root_logger.setLevel(self.config.log_level)
+
+        # Create formatters
+        formatters = {
+            "default": logging.Formatter(self.config.log_format),
+            **{name: logging.Formatter(fmt) for name, fmt in self.config.formatters.items()},
+        }
+
+        # Setup console handler if enabled
+        if self.config.log_to_console:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(self.config.console_level)
+            console_handler.setFormatter(formatters["default"])
+            root_logger.addHandler(console_handler)
+
+        # Setup file handler if enabled
+        if self.config.log_to_file and self.config.log_file:
+            # Ensure log directory exists
+            log_dir = Path(self.config.log_dir)
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create file handler
+            file_handler = RotatingFileHandler(
+                filename=log_dir / self.config.log_file,
+                maxBytes=self.config.max_log_size_mb * 1024 * 1024,
+                backupCount=self.config.backup_count,
+            )
+            file_handler.setLevel(self.config.file_level)
+            file_handler.setFormatter(formatters["default"])
             root_logger.addHandler(file_handler)
-            
+
+        # Configure noisy loggers
+        for logger_name in self.config.noisy_loggers:
+            logging.getLogger(logger_name).setLevel(logging.WARNING)
+
     def get_logger(self, name: str) -> logging.Logger:
-        """
-        Get a logger instance with the specified name.
-        
+        """Get a logger instance.
+
         Args:
-            name: Name of the logger
-            
+            name: Logger name
+
         Returns:
-            Logger instance
+            Configured logger instance
         """
         return logging.getLogger(name)
-        
+
+    def set_level(self, name: str, level: str) -> None:
+        """Set logging level for a specific logger.
+
+        Args:
+            name: Logger name
+            level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        """
+        logger = logging.getLogger(name)
+        logger.setLevel(level)
+
+    def add_handler(self, name: str, handler: logging.Handler) -> None:
+        """Add a handler to a specific logger.
+
+        Args:
+            name: Logger name
+            handler: Logging handler to add
+        """
+        logger = logging.getLogger(name)
+        logger.addHandler(handler)
+
+    def remove_handler(self, name: str, handler: logging.Handler) -> None:
+        """Remove a handler from a specific logger.
+
+        Args:
+            name: Logger name
+            handler: Logging handler to remove
+        """
+        logger = logging.getLogger(name)
+        logger.removeHandler(handler)
+
+    def get_handlers(self, name: str) -> list[logging.Handler]:
+        """Get all handlers for a specific logger.
+
+        Args:
+            name: Logger name
+
+        Returns:
+            List of handlers
+        """
+        logger = logging.getLogger(name)
+        return logger.handlers
+
     def log_exception(self, logger: logging.Logger, e: Exception, message: str) -> None:
         """
         Log an exception with traceback.
-        
+
         Args:
             logger: Logger instance
             e: Exception to log
             message: Error message
         """
         logger.error(f"{message}: {str(e)}", exc_info=True)
-        
+
     def get_stats(self) -> Dict[str, Any]:
         """Get service statistics."""
         return {
             "log_level": logging.getLevelName(logging.getLogger().level),
-            "log_file": self.config.get_merged_config().get("log_file"),
-            "log_format": self.config.get_merged_config().get("log_format")
+            "log_file": self.config.log_file,
+            "log_format": self.config.log_format,
         }
-
-# Global instance for backward compatibility
-_logging_service: Optional[LoggingService] = None
-
-def get_logger(name: str) -> logging.Logger:
-    """
-    Get a logger instance with the specified name.
-    Always uses the global logging configuration.
-    
-    Args:
-        name: Name of the logger
-        
-    Returns:
-        Logger instance
-    """
-    global _logging_service
-    if _logging_service is None:
-        # Create default config if none exists
-        config = LoggingServiceConfig()
-        _logging_service = LoggingService(config)
-    return _logging_service.get_logger(name) 

@@ -15,7 +15,9 @@ implementation, see the template_agent's graph implementation which includes:
 """
 
 from langgraph.graph import StateGraph
+
 from src.state.state_models import GraphState
+
 
 def build_orchestrator_graph() -> StateGraph:
     """

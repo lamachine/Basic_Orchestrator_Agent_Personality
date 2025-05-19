@@ -1,1 +1,1 @@
-# Template Agent models package 
+# Template Agent models package

@@ -26,13 +26,13 @@ To use Gmail integration:
    ```bash
    # Enable Gmail integration
    GMAIL_ENABLED=true
-   
+
    # Path to your credentials file
    GMAIL_CREDENTIALS_PATH=/path/to/your/credentials.json
-   
+
    # Optional: Path for token storage (defaults to token.pickle)
    GMAIL_TOKEN_PATH=/path/to/token.pickle
-   
+
    # Optional: Gmail user ID (defaults to 'me')
    GMAIL_USER_ID=your.email@gmail.com
    ```
@@ -130,4 +130,4 @@ pytest tests/
 
 ## License
 
-MIT License - See LICENSE file for details 
+MIT License - See LICENSE file for details

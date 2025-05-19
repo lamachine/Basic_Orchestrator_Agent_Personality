@@ -1,34 +1,21 @@
 """
 CLI-specific entry point for the template agent.
 
-This script serves as a thin wrapper that initializes and runs the template agent
-with the CLI interface.
+This script is a thin wrapper that calls the main template agent
+with the CLI interface selected.
 """
 
-import sys
-import os
 import asyncio
+import os
+import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load environment variables from root .env file
-root_dir = Path(__file__).parent.parent.parent.parent
-dotenv_path = root_dir / '.env'
-if dotenv_path.exists():
-    load_dotenv(dotenv_path)
-    print(f"Loaded environment variables from {dotenv_path}")
-else:
-    print(f"Warning: No .env file found at {dotenv_path}")
+# Add src directory to path
+src_dir = Path(__file__).parent / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
-# Ensure template_agent src directory is in the path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
-# Import logging setup first
-from src.common.services.logging_service import setup_logging
-setup_logging()
-
-# Import the main function that handles CLI setup
-from src.main_cli import run_with_cli_interface
+from src.main import run_with_interface
 
 if __name__ == "__main__":
-    asyncio.run(run_with_cli_interface()) 
+    asyncio.run(run_with_interface("cli"))

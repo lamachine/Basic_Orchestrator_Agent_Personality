@@ -1,10 +1,9 @@
 """
-MCP (Message Control Protocol) adapter for the template agent.
+Template Agent MCP Adapter package.
 
-This adapter provides a standardized interface for MCP-based communication
-with the template agent system.
+This package contains the MCP interface adapter implementation.
 """
 
 from .mcp_adapter import MCPAdapter
 
-__all__ = ['MCPAdapter'] 
+__all__ = ["MCPAdapter"]

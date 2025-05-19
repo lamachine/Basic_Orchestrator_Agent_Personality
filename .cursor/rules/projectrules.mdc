@@ -1,6 +1,6 @@
 ---
 description: This is the high level view of rules for the project generally and guide to specific rules for tools.
-globs: 
+globs:
 alwaysApply: false
 ---
 # Project Rules
@@ -80,5 +80,3 @@ Testing Guidelines: Concise key points or a reference to a separate testing docu
 - Maintain clear documentation including setup instructions, Supabase schema, RLS policies, and Edge Functions.
 
 *Load these project rules into your settings as the development guidelines.*
-
-

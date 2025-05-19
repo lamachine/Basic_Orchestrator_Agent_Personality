@@ -74,61 +74,61 @@ Each tool follows this standardized structure:
     README.md              # Tool documentation
     LICENSE                # License information
     .gitignore            # Git ignore rules
-    
+
     /logs                  # Log files
     /tests                 # Test files
         test_<toolname>.py # Tool-specific tests
         conftest.py        # Shared test fixtures
-    
+
     <toolname>_tool.py     # Pydantic model for parent graph
-    
+
     /src
         /agents            # Business logic
             <toolname>_agent.py
             base_agent.py  # Base agent class
-        
+
         /config            # Configuration files
             tool_config.yaml    # Tool registry info
             graph_config.py     # Graph-specific settings
             llm_config.py       # LLM configuration
             db_config.py        # Database configuration
-        
+
         /db               # Database models and operations
             models.py
             operations.py
-        
+
         /graphs           # LangGraph workflow definitions
             <toolname>_graph.py
-        
+
         /managers         # State and session management
             state_manager.py
             session_manager.py
-        
+
         /services         # Core services
             llm_service.py
             message_service.py
             db_service.py
-        
+
         /state           # State models and persistence
             state_models.py
             state_manager.py
-        
+
         /sub_graphs      # Sub-tools this tool may use
             /<subtool>_agent/
                 # (Same structure as parent)
-        
+
         /tools           # Tool implementations
             <toolname>_tool.py
             tool_utils.py
-        
+
         /ui              # Connection points
             sub_graph_interface.py
             cli_interface.py
-        
+
         /utils           # Utility functions
             logging_utils.py
             error_utils.py
-        
+
         main.py          # Entry point
 ```
 
@@ -270,11 +270,11 @@ from typing import Dict, Any, Optional
 
 class PersonalAssistantTool(BaseModel):
     """Tool interface for parent graph to interact with personal assistant."""
-    
+
     name: str = "personal_assistant"
     description: str = "Handles personal tasks, emails, and calendar management"
     version: str = "0.1.0"
-    
+
     # Tool-specific configuration
     config: Dict[str, Any] = Field(
         default_factory=lambda: {
@@ -283,21 +283,21 @@ class PersonalAssistantTool(BaseModel):
             "timeout_seconds": 30
         }
     )
-    
+
     # Required capabilities
     capabilities: list[str] = ["email", "calendar", "tasks"]
-    
+
     async def execute(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a tool request from the parent graph.
-        
+
         Args:
             request: The request from the parent graph containing:
                 - request_id: Unique identifier for this request
                 - parent_request_id: ID of the parent request
                 - action: The action to perform
                 - parameters: Tool-specific parameters
-                
+
         Returns:
             Dict containing:
                 - request_id: Echo of the request ID
@@ -343,7 +343,7 @@ class PersonalAssistantTool(BaseModel):
 async def handle_user_request(request: Dict[str, Any]):
     # Create tool instance
     tool = PersonalAssistantTool()
-    
+
     # Execute tool
     response = await tool.execute({
         "request_id": "uuid-123",
@@ -355,7 +355,7 @@ async def handle_user_request(request: Dict[str, Any]):
             "body": "Hello from the tool!"
         }
     })
-    
+
     # Handle response
     if response["status"] == "success":
         # Process successful response
@@ -481,7 +481,7 @@ The tools are integrated into the orchestrator using this pattern:
 2. If a tool is needed, the LLM generates a tool call
 3. The router function detects the tool call, assigns it a task id, and routes to the appropriate tool node asynchronously
 4. The tool node executes the tool and updates the state
-5. Control returns to to the LLM immediately after a tool call.  
+5. Control returns to to the LLM immediately after a tool call.
 6. The central graph node then monitors the task queue for the tool call to complete.  It then updates the state with the results and routes the response to the LLM.
 
 All communications between orchestrator and tools use structured tool calls rather than natural language, ensuring clean separation and reliable communication.
@@ -513,7 +513,7 @@ The system includes built-in RAG (Retrieval Augmented Generation) capabilities f
        query="search term",
        user_id="user123"
    )
-   
+
    # Semantic search with filters
    messages = await db_service.semantic_message_search(
        query_text="search term",
@@ -550,18 +550,18 @@ async def search_related_messages(
 ) -> List[Dict[str, Any]]:
     """
     Search for messages related to the query.
-    
+
     Args:
         query: Search query
         user_id: User ID for privacy filtering
         match_count: Number of matches to return
-        
+
     Returns:
         List of related messages
     """
     # Get query embedding
     embedding = await llm_service.get_embedding(query)
-    
+
     # Perform semantic search
     results = await db_service.semantic_message_search(
         query_text=query,
@@ -569,7 +569,7 @@ async def search_related_messages(
         user_id=user_id,
         match_count=match_count
     )
-    
+
     return results
 ```
 
@@ -825,17 +825,17 @@ These must be discussed and answered before any code is written. They are the fo
      * Must use local services
      * Can serve as parent for sub-graphs
      * Handles service initialization
-   
+
    - Sub-graph configuration:
      * Can use local or parent services
      * Inherits parent service configuration by default
      * Can override with local configuration
-   
+
    - Service implementation:
      * Defer remote service handling to service nodes
      * Allow for multiple service sources in future
      * Keep service implementation details encapsulated
-   
+
    - Shared code:
      * Messaging:
        - Share common message handling code
@@ -845,7 +845,7 @@ These must be discussed and answered before any code is written. They are the fo
        - Share state management code
        - Maintain consistent state structure
        * Use inheritance for graph-specific state
-   
+
    - Configuration system:
      * Simple local/parent choice
      * Future-proof for additional options
@@ -937,19 +937,19 @@ These must be discussed and answered before any code is written. They are the fo
        - Related requests
      * Clear decision points and criteria
      * Structured decision documentation
-   
+
    - State Access:
      * Direct database queries for current state
      * RAG for historical context
      * Cached state for performance
      * Clear state access patterns
-   
+
    - Context Management:
      * Maintain conversation context
      * Track decision chains
      * Link related requests
      * Document decision rationale
-   
+
    - Integration Points:
      * Tool response evaluation
      * State query handling
@@ -1028,7 +1028,7 @@ These must be discussed and answered before any code is written. They are the fo
 5. Implementation Notes:
    - Basic LLM integration exists and works
    - Missing: support for multiple providers
-   - Missing: model selection system 
+   - Missing: model selection system
    - Missing: fallback handling
    - Missing: task-specific model selection
    - Complexity: Medium
@@ -1100,7 +1100,7 @@ These must be discussed and answered before any code is written. They are the fo
      * Temporal versioning
      * Context management
      * Access patterns
-   
+
    - Integration Points:
      * Decision Making:
        - Provide context for decisions
@@ -1114,7 +1114,7 @@ These must be discussed and answered before any code is written. They are the fo
        - Enhance vector search
        - Provide relationship context
        - Support temporal queries
-   
+
    - Memory Operations:
      * Knowledge Creation:
        - Structured knowledge entry
@@ -1314,10 +1314,10 @@ Core features needed for MVP. High risk changes with high return.
 
             # Create child context for tool
             tool_context = context.create_child_context()
-            
+
             # Pass to tool
             result = await tool.execute(request, tool_context)
-            
+
             # Log response
             await log_message(
                 content=result["content"],
@@ -1344,10 +1344,10 @@ Core features needed for MVP. High risk changes with high return.
 
                 # Create child context for tool
                 tool_context = context.create_child_context()
-                
+
                 # Execute tool
                 result = await tool.execute(task, tool_context)
-                
+
                 # Log response
                 await log_and_persist_message(
                     session_state=context.session_state,
@@ -1357,7 +1357,7 @@ Core features needed for MVP. High risk changes with high return.
                     sender=f"{tool_name}.system",
                     target=f"orchestrator.{tool_name}"
                 )
-                
+
                 return result
             except Exception as e:
                 # Log error with context
@@ -1500,7 +1500,7 @@ class BaseGraphServices:
         """Get service instance based on configuration."""
            if service_name not in self._services:
             service_config = self.config[service_name]
-            
+
             if service_config.source == ServiceSource.PARENT and self.parent_services:
                 # Use parent's service
                    self._services[service_name] = await self.parent_services.get_service(service_name)
@@ -1599,28 +1599,28 @@ class BaseGraphServices:
 
    class ToolDiscovery:
        """Handles discovery and loading of tools."""
-       
+
        def __init__(self, sub_graphs_dir: str = "src/sub_graphs"):
            self.sub_graphs_dir = Path(sub_graphs_dir)
-           
+
        async def discover_tools(self) -> List[Dict[str, Any]]:
            """Find and load all tools in sub_graphs."""
            if not self.sub_graphs_dir.exists():
                logger.warning("sub_graphs directory not found")
                return []
-               
+
            discovered_tools = []
            for tool_dir in self.sub_graphs_dir.glob("*_agent"):
                if not tool_dir.is_dir():
                    continue
-                   
+
                tool_name = tool_dir.name.replace("_agent", "")
                tool_info = await self._load_tool(tool_dir, tool_name)
                if tool_info:
                    discovered_tools.append(tool_info)
-                   
+
            return discovered_tools
-           
+
        async def _load_tool(self, tool_dir: Path, tool_name: str) -> Optional[Dict[str, Any]]:
            """Load a single tool from its directory."""
            # Implementation of tool loading logic
@@ -1636,17 +1636,17 @@ class BaseGraphServices:
 
    class ToolValidation:
        """Validates tool configurations and capabilities."""
-       
+
        def validate_tool_config(self, config: Dict[str, Any]) -> bool:
            """Validate a tool's configuration."""
            # Implementation of config validation
            pass
-           
+
        def validate_tool_capabilities(self, capabilities: List[str]) -> bool:
            """Validate a tool's capabilities."""
            # Implementation of capabilities validation
            pass
-           
+
        def validate_tool_interface(self, tool_func: Any) -> bool:
            """Validate a tool's interface."""
            # Implementation of interface validation
@@ -1664,23 +1664,23 @@ class BaseGraphServices:
 
    class ToolStateManager:
        """Manages tool state persistence and loading."""
-       
+
        def __init__(self, data_dir: str = "src/data/tool_registry"):
            self.data_dir = Path(data_dir)
            self.data_dir.mkdir(parents=True, exist_ok=True)
-           
+
        def persist_state(self, state: Dict[str, Any]) -> None:
            """Save current state to data directory."""
            state_file = self.data_dir / "tool_state.json"
            with open(state_file, 'w') as f:
                json.dump(state, f, indent=2)
-               
+
        def load_state(self) -> Dict[str, Any]:
            """Load previously persisted state."""
            state_file = self.data_dir / "tool_state.json"
            if not state_file.exists():
                return {}
-               
+
            with open(state_file) as f:
                return json.load(f)
    ```
@@ -1696,30 +1696,30 @@ class BaseGraphServices:
 
    class ToolRegistry:
        """Tool registry that coordinates tool management."""
-       
+
        def __init__(self, data_dir: str = "src/data/tool_registry"):
            self.tools: Dict[str, Any] = {}
            self.tool_configs: Dict[str, dict] = {}
-           
+
            # Initialize components
            self.discovery = ToolDiscovery()
            self.validation = ToolValidation()
            self.state_manager = ToolStateManager(data_dir)
-           
+
            # Load persisted state
            self._load_persisted_state()
-           
+
        async def discover_tools(self):
            """Find and register all tools."""
            discovered_tools = await self.discovery.discover_tools()
-           
+
            for tool_info in discovered_tools:
                if self.validation.validate_tool_config(tool_info["config"]):
                    self.tools[tool_info["name"]] = tool_info["tool"]
                    self.tool_configs[tool_info["name"]] = tool_info["config"]
-                   
+
            self._persist_state()
-           
+
        def _persist_state(self):
            """Save current state."""
            state = {
@@ -1727,7 +1727,7 @@ class BaseGraphServices:
                "configs": self.tool_configs
            }
            self.state_manager.persist_state(state)
-           
+
        def _load_persisted_state(self):
            """Load persisted state."""
            state = self.state_manager.load_state()
@@ -1755,7 +1755,7 @@ Minimum functionality with templates. Initial tools with minimal effort.
    - [x] Document workarounds for current limitations
    - [x] Create migration guide for future updates
    - [x] Add version compatibility notes
-   
+
 1. **Core Changes That May Affect Tools**
    - Request ID system changes
    - Message format updates
@@ -1859,7 +1859,7 @@ Necessary changes before broad deployment. Medium/high risk changes.
 
    class StateManager:
        """Enhanced state manager with validation and persistence."""
-       
+
        def __init__(self, state: Optional[GraphState] = None):
            self.state = state or GraphState()
            self.validator = StateValidator()
@@ -1868,12 +1868,12 @@ Necessary changes before broad deployment. Medium/high risk changes.
            """Update state with validation."""
            # Validate update
            self.validator.validate_update(update)
-           
+
            # Apply update
            for key, value in update.items():
                if hasattr(self.state, key):
                    setattr(self.state, key, value)
-           
+
            # Persist state
            await self._persist_state()
            return self.state
@@ -1898,17 +1898,17 @@ Necessary changes before broad deployment. Medium/high risk changes.
 
    class StateValidator:
        """Validates state updates and transitions."""
-       
+
        def validate_update(self, update: Dict[str, Any]) -> None:
            """Validate a state update."""
            # Implementation of update validation
            pass
-           
+
        def validate_message(self, message: Message) -> None:
            """Validate a message."""
            # Implementation of message validation
            pass
-           
+
        def validate_transition(self, current_state: GraphState, new_state: GraphState) -> None:
            """Validate a state transition."""
            # Implementation of transition validation

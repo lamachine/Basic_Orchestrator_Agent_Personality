@@ -1,1 +1,1 @@
-# Template Agent managers package 
+# Template Agent managers package

@@ -10,14 +10,14 @@ This module tests the error classes for state management, including:
 import pytest
 
 from ...src.common.state.state_errors import (
-    StateError,
-    ValidationError,
-    StateUpdateError,
-    StateTransitionError,
-    MessageError,
-    TaskError,
     AgentStateError,
-    PersistenceError
+    MessageError,
+    PersistenceError,
+    StateError,
+    StateTransitionError,
+    StateUpdateError,
+    TaskError,
+    ValidationError,
 )
 
 
@@ -25,11 +25,11 @@ def test_state_error_base_class():
     """Test StateError base class."""
     # Test case: Normal operation - should pass
     error = StateError("Test error message")
-    
+
     # Verify it's a proper exception
     assert isinstance(error, Exception)
     assert str(error) == "Test error message"
-    
+
     # Verify proper inheritance
     assert issubclass(StateError, Exception)
 
@@ -44,7 +44,7 @@ def test_specialized_error_classes():
     task_error = TaskError("Task operation failed")
     agent_state_error = AgentStateError("Agent state operation failed")
     persistence_error = PersistenceError("Persistence operation failed")
-    
+
     # Verify proper inheritance
     assert isinstance(validation_error, StateError)
     assert isinstance(update_error, StateError)
@@ -53,7 +53,7 @@ def test_specialized_error_classes():
     assert isinstance(task_error, StateError)
     assert isinstance(agent_state_error, StateError)
     assert isinstance(persistence_error, StateError)
-    
+
     # Verify error messages
     assert str(validation_error) == "Validation failed"
     assert str(update_error) == "Update failed"
@@ -70,11 +70,11 @@ def test_error_raising():
     with pytest.raises(ValidationError) as excinfo:
         raise ValidationError("Custom validation error")
     assert "Custom validation error" in str(excinfo.value)
-    
+
     with pytest.raises(StateUpdateError) as excinfo:
         raise StateUpdateError("Custom update error")
     assert "Custom update error" in str(excinfo.value)
-    
+
     # Test raising with custom data
     with pytest.raises(TaskError) as excinfo:
         error_data = {"task_id": "123", "status": "failed"}
@@ -87,7 +87,7 @@ def test_error_edge_cases():
     # Test case: Edge case - empty error message
     empty_error = StateError("")
     assert str(empty_error) == ""
-    
+
     # Test case: Edge case - nested exceptions
     try:
         try:
@@ -98,7 +98,7 @@ def test_error_edge_cases():
         assert "Wrapped error" in str(se)
         assert isinstance(se.__cause__, ValueError)
         assert "Original error" in str(se.__cause__)
-    
+
     # Test case: Edge case - error with non-string arg
     try:
         raise StateError(123)
@@ -108,6 +108,7 @@ def test_error_edge_cases():
 
 def test_error_class_hierarchy():
     """Test the error class hierarchy."""
+
     # Test case: Edge case - hierarchical error handling
     def handle_errors(error):
         if isinstance(error, ValidationError):
@@ -118,9 +119,9 @@ def test_error_class_hierarchy():
             return "Generic"
         else:
             return "Unknown"
-    
+
     # Verify that the error hierarchy is correctly detected
     assert handle_errors(ValidationError("Test")) == "Validation"
     assert handle_errors(StateUpdateError("Test")) == "Update"
     assert handle_errors(StateError("Test")) == "Generic"
-    assert handle_errors(Exception("Test")) == "Unknown" 
+    assert handle_errors(Exception("Test")) == "Unknown"

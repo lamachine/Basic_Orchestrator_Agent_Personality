@@ -9,23 +9,18 @@ Provides a unified interface for storing, retrieving, and manipulating applicati
 - Transaction management
 """
 
-from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-from src.state.state_models import (
-    Message, 
-    MessageRole, 
-    MessageState, 
-    TaskStatus, 
-    GraphState,
-)
 from src.state.state_errors import (
-    StateError, 
-    ValidationError, 
-    StateUpdateError, 
-    StateTransitionError
+    StateError,
+    StateTransitionError,
+    StateUpdateError,
+    ValidationError,
 )
+from src.state.state_models import GraphState, Message, MessageRole, MessageState, TaskStatus
 from src.state.state_validator import StateValidator
+
 
 def update_agent_state(state: GraphState, agent_id: str, update: Dict[str, Any]) -> GraphState:
     """
@@ -39,10 +34,11 @@ def update_agent_state(state: GraphState, agent_id: str, update: Dict[str, Any])
     Returns:
         GraphState: The updated graph state
     """
-    if agent_id not in state['agent_states']:
-        state['agent_states'][agent_id] = {}
-    state['agent_states'][agent_id].update(update)
+    if agent_id not in state["agent_states"]:
+        state["agent_states"][agent_id] = {}
+    state["agent_states"][agent_id].update(update)
     return state
+
 
 def add_task_to_history(state: GraphState, task: str) -> GraphState:
     """
@@ -55,13 +51,15 @@ def add_task_to_history(state: GraphState, task: str) -> GraphState:
     Returns:
         GraphState: The updated graph state
     """
-    state['task_history'].append(f"{datetime.now().isoformat()}: {task}")
+    state["task_history"].append(f"{datetime.now().isoformat()}: {task}")
     return state
+
 
 class StateManager:
     """
     Manages application state, validation, and (optionally) persistence.
     """
+
     def __init__(self, db_manager: Optional[Any] = None) -> None:
         """
         Args:
@@ -101,8 +99,7 @@ class StateManager:
         session_id_int = int(session_id)
         if session_id_int not in self.sessions:
             self.sessions[session_id_int] = MessageState(
-                session_id=session_id_int,
-                db_manager=self.db_manager
+                session_id=session_id_int, db_manager=self.db_manager
             )
         return self.sessions[session_id_int]
 
@@ -111,7 +108,7 @@ class StateManager:
         session_id: str,
         role: MessageRole,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> MessageState:
         """
         Update a session with a new message.
@@ -153,10 +150,7 @@ class StateManager:
         return list(self.sessions.values())
 
     async def update_agent_state(
-        self,
-        session_id: str,
-        agent_id: str,
-        status: Dict[str, Any]
+        self, session_id: str, agent_id: str, status: Dict[str, Any]
     ) -> None:
         """
         Update an agent's state within a session.
@@ -179,11 +173,7 @@ class StateManager:
             self._error_count += 1
             raise StateUpdateError(f"Failed to update agent state: {str(e)}") from e
 
-    async def start_task(
-        self,
-        session_id: str,
-        task: str
-    ) -> None:
+    async def start_task(self, session_id: str, task: str) -> None:
         """
         Start a new task in the session.
 
@@ -207,11 +197,7 @@ class StateManager:
             self._error_count += 1
             raise StateUpdateError(f"Failed to start task: {str(e)}") from e
 
-    async def complete_task(
-        self,
-        session_id: str,
-        result: Optional[Dict[str, Any]] = None
-    ) -> None:
+    async def complete_task(self, session_id: str, result: Optional[Dict[str, Any]] = None) -> None:
         """
         Complete the current task in the session.
 
@@ -237,11 +223,7 @@ class StateManager:
             self._error_count += 1
             raise StateUpdateError(f"Failed to complete task: {str(e)}") from e
 
-    async def fail_task(
-        self,
-        session_id: str,
-        error: str
-    ) -> None:
+    async def fail_task(self, session_id: str, error: str) -> None:
         """
         Mark the current task as failed in the session.
 
@@ -274,16 +256,9 @@ class StateManager:
         Returns:
             Dict[str, int]: Error and update counts
         """
-        return {
-            "error_count": self._error_count,
-            "update_count": self._update_count
-        }
+        return {"error_count": self._error_count, "update_count": self._update_count}
 
-    def get_agent_state(
-        self,
-        session_id: str,
-        agent_id: str
-    ) -> Dict[str, Any]:
+    def get_agent_state(self, session_id: str, agent_id: str) -> Dict[str, Any]:
         """
         Get an agent's state from a session.
 
@@ -297,11 +272,7 @@ class StateManager:
         session = self.get_session(session_id)
         return session.get_agent_state(agent_id)
 
-    def get_session_context(
-        self,
-        session_id: str,
-        window_size: int = 5
-    ) -> List[Message]:
+    def get_session_context(self, session_id: str, window_size: int = 5) -> List[Message]:
         """
         Get recent messages from a session.
 
@@ -315,10 +286,7 @@ class StateManager:
         session = self.get_session(session_id)
         return session.get_context_window(window_size)
 
-    def get_task_history(
-        self,
-        session_id: str
-    ) -> List[str]:
+    def get_task_history(self, session_id: str) -> List[str]:
         """
         Get the task history for a session.
 
@@ -329,4 +297,4 @@ class StateManager:
             List[str]: Task history entries
         """
         session = self.get_session(session_id)
-        return session.task_history 
+        return session.task_history

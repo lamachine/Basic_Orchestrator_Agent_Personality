@@ -60,4 +60,4 @@ To add a new interface:
 1. Create a new class that extends `UserInterface`
 2. Implement all required methods
 3. Register the interface in `main.py`
-4. Create a specific launcher (e.g., `run_web.py`) 
+4. Create a specific launcher (e.g., `run_web.py`)

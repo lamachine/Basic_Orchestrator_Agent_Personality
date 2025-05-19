@@ -22,30 +22,34 @@ personality:
 
 Backwards compatible with single-personality config.
 """
+
 import os
-from typing import Optional, Dict
-from pydantic import BaseModel, ValidationError
+from typing import Dict, Optional
+
 import yaml
+from pydantic import BaseModel, ValidationError
 
 DEFAULT_PERSONALITY_CONFIG = {
-    'enabled': True,
-    'file_path': os.path.abspath('src/agents/Character_Ronan_valet_orchestrator.json'),
-    'use_by_default': True
+    "enabled": True,
+    "file_path": os.path.abspath("src/agents/Character_Ronan_valet_orchestrator.json"),
+    "use_by_default": True,
 }
+
 
 class PersonalityConfig(BaseModel):
     enabled: bool = True
     file_path: str
     use_by_default: bool = False
 
+
 class PersonalitiesConfig(BaseModel):
-    default_personality: str = 'valet'
+    default_personality: str = "valet"
     personalities: Dict[str, PersonalityConfig]
 
 
 def get_personality_config(
     name: Optional[str] = None,
-    config_path: str = 'src/config/developer_user_config.yaml'
+    config_path: str = "src/config/developer_user_config.yaml",
 ) -> PersonalityConfig:
     """
     Load and validate personality config for a given personality (or default).
@@ -58,11 +62,11 @@ def get_personality_config(
         ValueError: If config is invalid.
     """
     if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f) or {}
-        section = config.get('personality', {})
-        personalities = section.get('personalities', {})
-        default_name = section.get('default_personality', 'valet')
+        section = config.get("personality", {})
+        personalities = section.get("personalities", {})
+        default_name = section.get("default_personality", "valet")
         if personalities:
             personalities_cfg = {
                 k: PersonalityConfig(**{**DEFAULT_PERSONALITY_CONFIG, **v})
@@ -80,22 +84,25 @@ def get_personality_config(
             raise ValueError(f"Invalid personality config: {e}")
     return PersonalityConfig(**DEFAULT_PERSONALITY_CONFIG)
 
-def list_personalities(config_path: str = 'src/config/developer_user_config.yaml') -> Dict[str, PersonalityConfig]:
+
+def list_personalities(
+    config_path: str = "src/config/developer_user_config.yaml",
+) -> Dict[str, PersonalityConfig]:
     """
     List all available personalities from config.
     Returns:
         Dict[str, PersonalityConfig]
     """
     if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f) or {}
-        section = config.get('personality', {})
-        personalities = section.get('personalities', {})
+        section = config.get("personality", {})
+        personalities = section.get("personalities", {})
         if personalities:
             return {
                 k: PersonalityConfig(**{**DEFAULT_PERSONALITY_CONFIG, **v})
                 for k, v in personalities.items()
             }
         # fallback: single config
-        return {'default': PersonalityConfig(**{**DEFAULT_PERSONALITY_CONFIG, **section})}
-    return {'default': PersonalityConfig(**DEFAULT_PERSONALITY_CONFIG)} 
+        return {"default": PersonalityConfig(**{**DEFAULT_PERSONALITY_CONFIG, **section})}
+    return {"default": PersonalityConfig(**DEFAULT_PERSONALITY_CONFIG)}

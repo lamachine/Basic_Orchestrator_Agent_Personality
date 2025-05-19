@@ -1,10 +1,12 @@
-from common.managers.memory_manager import Mem0Memory, SwarmMessage
 import logging
+
+from common.managers.memory_manager import Mem0Memory, SwarmMessage
 
 logger = logging.getLogger(__name__)
 
 # Initialize Mem0Memory
 mem0 = Mem0Memory()
+
 
 async def add_swarm_message(content: str, user_id: str, metadata: dict = None):
     """
@@ -23,6 +25,7 @@ async def add_swarm_message(content: str, user_id: str, metadata: dict = None):
     logger.debug(f"Memory metadata: {metadata}")
     return mem0.add_memory(message)
 
+
 async def search_swarm_messages(query: str, user_id: str, top_k: int = 5):
     """
     Search swarm messages in mem0 memory.
@@ -37,6 +40,8 @@ async def search_swarm_messages(query: str, user_id: str, top_k: int = 5):
     """
     logger.info(f"Searching memories for user {user_id} with query: {query}")
     results = mem0.search_memory(query, top_k=top_k)
-    filtered_results = [r for r in results.get("results", []) if r.get("metadata", {}).get("user_id") == user_id]
+    filtered_results = [
+        r for r in results.get("results", []) if r.get("metadata", {}).get("user_id") == user_id
+    ]
     logger.debug(f"Found {len(filtered_results)} results for user {user_id}")
-    return {"results": filtered_results} 
+    return {"results": filtered_results}

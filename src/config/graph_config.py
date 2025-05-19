@@ -10,7 +10,8 @@ is represented by an explicit config dataclass.
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any, Dict
+
 from src.config.llm_config import LLMConfig
 from src.config.logging_config import LoggingConfig
 
@@ -18,27 +19,35 @@ from src.config.logging_config import LoggingConfig
 
 # tool registry is already in code
 
+
 @dataclass
 class DBConfig:
     """Configuration for database access."""
+
     provider: str = "local"  # 'local', 'parent', or 'standalone'
     # If parent, you can remove the following files from the sub-graph:
     # - xxx.py
+
 
 @dataclass
 class StateConfig:
     """Configuration for state management."""
+
     provider: str = "local"  # 'local', 'parent', or 'standalone'
     # If parent, you can remove the following files from the sub-graph:
     # - xxx.py
 
+
 # configure logging in logging_config.py
+
 
 @dataclass
 class UserConfig:
     """Configuration for user/role/line-level security."""
+
     provider: str = "local"  # 'parent' or 'local'
     # Typically only local is only for the top level graph.
+
 
 @dataclass
 class AllGraphsConfig:
@@ -46,6 +55,7 @@ class AllGraphsConfig:
     Configuration fields required by all graphs.
     Each required feature is an explicit config dataclass.
     """
+
     graph_name: str = "orchestrator_graph"
     system_prompt: str = (
         "You are a helpful AI agent administering a range of tools. "
@@ -70,12 +80,14 @@ class AllGraphsConfig:
             "user": self.user.__dict__,
         }
 
+
 @dataclass
 class OrchestratorConfig(AllGraphsConfig):
     """
     Orchestrator-specific configuration fields and overrides.
     Sets all options and settings as currently functioning in orchestrator.
     """
+
     graph_name: str = "orchestrator_graph"
     system_prompt: str = (
         "You are the orchestrator for a team of agents arranged in a hierarchy. "

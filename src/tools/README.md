@@ -75,4 +75,4 @@ The tool processing system is designed to handle:
 - **Missing fields**: Using fallback values when expected fields are absent
 - **Different formats**: Converting various response formats to a standard structure
 - **Nested data**: Extracting relevant information from complex nested structures
-- **Timeouts**: Managing long-running tool executions that exceed time limits 
+- **Timeouts**: Managing long-running tool executions that exceed time limits

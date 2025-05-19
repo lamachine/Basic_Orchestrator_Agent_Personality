@@ -7,12 +7,14 @@ Provides personality integration for agents, allowing characters to be defined i
 import json
 import os
 import random
-from typing import Dict, Any, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
+
 
 class PersonalityAgent:
     """
     Wraps a base agent and injects personality traits from a JSON file.
     """
+
     agent: Any
     personality_file: str
     personality: Dict[str, Any]
@@ -29,11 +31,11 @@ class PersonalityAgent:
         self.agent = base_agent
         self.personality_file = personality_file
         self.personality = self._load_personality(personality_file)
-        
+
         # Only set up passthrough attributes if we have a base agent
         if base_agent is not None:
             self._setup_passthrough_attributes()
-            
+
         self.used_knowledge = set()
         self.used_lore = set()
         self.last_context = None
@@ -45,9 +47,9 @@ class PersonalityAgent:
         try:
             if not os.path.exists(file_path):
                 return self._create_default_personality()
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 personality = json.load(f)
-            for field in ['name', 'bio', 'style']:
+            for field in ["name", "bio", "style"]:
                 if field not in personality:
                     personality[field] = self._get_default_for_field(field)
             return personality
@@ -62,7 +64,7 @@ class PersonalityAgent:
             "style": {"chat": ["Responds in a helpful, accurate manner."]},
             "limitations": ["Cannot access the physical world"],
             "knowledge": [],
-            "lore": []
+            "lore": [],
         }
 
     def _get_default_for_field(self, field: str) -> Any:
@@ -73,16 +75,22 @@ class PersonalityAgent:
             "limitations": ["Cannot access the physical world"],
             "knowledge": [],
             "lore": [],
-            "people": []
+            "people": [],
         }
         return defaults.get(field, [])
 
     def _setup_passthrough_attributes(self):
         """Pass through key attributes and methods to the base agent."""
-        for attr in ['conversation_id', 'session_id', 'user_id', 'orchestrator', 'state_manager']:
+        for attr in [
+            "conversation_id",
+            "session_id",
+            "user_id",
+            "orchestrator",
+            "state_manager",
+        ]:
             if hasattr(self.agent, attr):
                 setattr(self, attr, getattr(self.agent, attr))
-        for method in ['set_conversation_id', 'process_user_input']:
+        for method in ["set_conversation_id", "process_user_input"]:
             if hasattr(self.agent, method):
                 setattr(self, method, getattr(self.agent, method))
 
@@ -100,28 +108,55 @@ class PersonalityAgent:
             header += f"\nLimitations: {' '.join(p['limitations'])}"
         return header
 
-    def get_contextual_personality(self, user_input: str, conversation_history: Optional[List[Dict[str, Any]]] = None) -> str:
+    def get_contextual_personality(
+        self,
+        user_input: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
         """
         Return relevant personality elements based on context.
         """
         context_parts = []
-        knowledge = self._select_relevant_items(self.personality.get("knowledge", []), user_input, conversation_history, 2, self.used_knowledge)
+        knowledge = self._select_relevant_items(
+            self.personality.get("knowledge", []),
+            user_input,
+            conversation_history,
+            2,
+            self.used_knowledge,
+        )
         if knowledge:
             self.used_knowledge.update(knowledge)
             context_parts.append(f"Relevant knowledge: {' '.join(knowledge)}")
-        lore = self._select_relevant_items(self.personality.get("lore", []), user_input, conversation_history, 1, self.used_lore)
+        lore = self._select_relevant_items(
+            self.personality.get("lore", []),
+            user_input,
+            conversation_history,
+            1,
+            self.used_lore,
+        )
         if lore:
             self.used_lore.update(lore)
             context_parts.append(f"Background: {' '.join(lore)}")
         people = self._get_relevant_people(user_input, conversation_history)
         if people:
-            people_items = [p for p in self.personality.get("people", []) if any(person in p for person in people)]
+            people_items = [
+                p
+                for p in self.personality.get("people", [])
+                if any(person in p for person in people)
+            ]
             if people_items:
                 context_parts.append(f"People mentioned: {' '.join(people_items[:2])}")
         self.last_context = "\n\n".join(context_parts)
         return self.last_context
 
-    def _select_relevant_items(self, items: List[str], user_input: str, conversation_history: Optional[List[Dict[str, Any]]] = None, max_items: int = 2, exclude: Optional[Set[str]] = None) -> List[str]:
+    def _select_relevant_items(
+        self,
+        items: List[str],
+        user_input: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        max_items: int = 2,
+        exclude: Optional[Set[str]] = None,
+    ) -> List[str]:
         """
         Select items most relevant to the conversation (simple keyword match).
         """
@@ -136,7 +171,13 @@ class PersonalityAgent:
             for msg in conversation_history[-3:]:
                 if isinstance(msg, dict) and "content" in msg:
                     conversation_text += " " + msg["content"].lower()
-        scores = [(item, len(set(item.lower().split()).intersection(conversation_text.split()))) for item in available_items]
+        scores = [
+            (
+                item,
+                len(set(item.lower().split()).intersection(conversation_text.split())),
+            )
+            for item in available_items
+        ]
         scores.sort(key=lambda x: x[1], reverse=True)
         if scores and scores[0][1] == 0:
             selected = [random.choice(available_items)]
@@ -144,14 +185,18 @@ class PersonalityAgent:
             selected = [item for item, score in scores[:max_items] if score > 0]
         return selected[:max_items]
 
-    def _get_relevant_people(self, user_input: str, conversation_history: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+    def _get_relevant_people(
+        self,
+        user_input: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[str]:
         """
         Return names of people mentioned in the conversation.
         """
         all_people = self.personality.get("people", [])
         if not all_people:
             return []
-        first_names = [person.split(',')[0].strip().split()[0].strip() for person in all_people]
+        first_names = [person.split(",")[0].strip().split()[0].strip() for person in all_people]
         text = user_input.lower()
         if conversation_history:
             for msg in conversation_history[-2:]:
@@ -165,7 +210,7 @@ class PersonalityAgent:
         """
         personality_header = self.create_personality_header()
         # Add personality traits after the system prompt but before the conversation
-        lines = prompt.split('\n\n')
+        lines = prompt.split("\n\n")
         if len(lines) > 1:
             # Insert personality after system prompt but before conversation
             return f"{lines[0]}\n\n{personality_header}\n\n{lines[1]}"
@@ -179,6 +224,6 @@ class PersonalityAgent:
             "debug report",
             "system check",
             "diagnostic mode",
-            "internal state"
+            "internal state",
         ]
-        return not any(indicator in prompt.lower() for indicator in diagnostic_indicators) 
+        return not any(indicator in prompt.lower() for indicator in diagnostic_indicators)

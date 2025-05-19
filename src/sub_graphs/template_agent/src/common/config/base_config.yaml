@@ -1,12 +1,12 @@
 llm:
-  default:
+  ollama:
     api_url: "http://localhost:11434"
     default_model: "llama3.1:latest"
     timeout: 30
     settings:
-      max_tokens: 4096
+      max_tokens: 2048
       context_window: 16384
-      temperature: 0.1
+      temperature: 0.7
       top_p: 0.9
       frequency_penalty: 0.0
       presence_penalty: 0.0
@@ -14,50 +14,142 @@ llm:
       embedding:
         model: "nomic-embed-text"
         settings:
-          temperature: 0.0
-          max_tokens: 512
+          max_tokens: 2048
+          context_window: 16384
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
+        dimensions: 1536
+        normalize: true
       programming:
         model: "llama3.1:latest"
         settings:
-          temperature: 0.2
-          max_tokens: 4096
+          max_tokens: 2048
+          context_window: 16384
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
       reasoning:
         model: "deepseek-r1"
         settings:
-          temperature: 0.3
           max_tokens: 2048
+          context_window: 16384
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
       chat:
         model: "llama3.1:latest"
         settings:
-          temperature: 0.7
           max_tokens: 2048
+          context_window: 16384
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
+  openai:
+    api_url: "https://api.openai.com/v1"
+    default_model: "gpt-4"
+    timeout: 30
+    settings:
+      max_tokens: 4096
+      context_window: 8192
+      temperature: 0.7
+      top_p: 0.9
+      frequency_penalty: 0.0
+      presence_penalty: 0.0
+    models:
+      embedding:
+        model: "text-embedding-ada-002"
+        settings:
+          max_tokens: 4096
+          context_window: 8192
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
+        dimensions: 1536
+        normalize: true
+      programming:
+        model: "gpt-4"
+        settings:
+          max_tokens: 4096
+          context_window: 8192
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
+      reasoning:
+        model: "gpt-4"
+        settings:
+          max_tokens: 4096
+          context_window: 8192
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
+      chat:
+        model: "gpt-4"
+        settings:
+          max_tokens: 4096
+          context_window: 8192
+          temperature: 0.7
+          top_p: 0.9
+          frequency_penalty: 0.0
+          presence_penalty: 0.0
+
+state:
+  state_dir: "./state"
+  state_file: "state.json"
+  backup_count: 5
+  auto_save: true
+  save_interval: 300
+  max_state_history: 100
+  cleanup_interval: 3600
+  compression_enabled: true
+  encryption_enabled: false
+
+session:
+  session_timeout: 3600
+  max_sessions: 100
+  cleanup_interval: 300
+  session_dir: "./sessions"
+  session_file: "session.json"
+  backup_count: 5
+  auto_cleanup: true
+  compression_enabled: true
+  encryption_enabled: false
+  session_types:
+    - "user"
+    - "system"
+    - "temporary"
+  retention_policy:
+    user_sessions: "30 days"
+    system_sessions: "7 days"
+    temporary_sessions: "1 day"
 
 logging:
   enable_logging: true
   log_level: "INFO"
   log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  log_file: "agent.log"
   log_to_console: true
-  log_to_file: false
+  log_to_file: true
   log_rotation: "1 day"
   log_retention: "7 days"
-  file_level: "DEBUG"
+  file_level: "INFO"
   console_level: "INFO"
-  log_dir: "./logs"
+  log_dir: "logs"
   max_log_size_mb: 10
   backup_count: 5
   formatters:
-    file:
+    default:
       format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    console:
-      format: "%(levelname)s: %(message)s"
-  noisy_loggers:
-    - "httpcore.http11"
-    - "httpx"
-    - "urllib3"
-    - "requests"
-    - "chardet.charsetprober"
-    - "asyncio"
-    - "charset_normalizer"
+    detailed:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(pathname)s:%(lineno)d"
+  noisy_loggers: []
 
 database:
   provider: "supabase_local"
@@ -71,7 +163,7 @@ database:
       anon_key: "your-anon-key"
       service_role_key: "your-service-role-key"
     postgres:
-      url: "postgresql://user:password@localhost:5432/dbname"
+      url: "postgresql://postgres:postgres@localhost:5432/postgres"
   pool_size: 5
   max_overflow: 10
   echo: false
@@ -79,8 +171,8 @@ database:
   pool_recycle: 3600
 
 graph:
-  name: "template_graph"
-  description: "Base graph configuration"
+  name: "template_agent"
+  description: "Template agent for basic orchestration"
   version: "1.0.0"
   max_depth: 10
   max_breadth: 5
@@ -91,28 +183,25 @@ graph:
 
 agent:
   enable_history: true
-  user_id: "developer"
-  graph_name: "template_graph"
+  user_id: "default_user"
+  graph_name: "template_agent"
   settings:
-    max_tokens: 4096
+    max_tokens: 2048
     context_window: 16384
-    temperature: 0.1
+    temperature: 0.7
     top_p: 0.9
     frequency_penalty: 0.0
     presence_penalty: 0.0
   enable_logging: true
-  prompt_section: ""
-  personality:
-    name: "base"
-    description: "Base personality configuration"
-    traits: []
-    goals: []
-    constraints: []
-    system_prompt: ""
-    examples: []
-    enabled: true
-    file_path: null
-    use_by_default: false
+  prompt_section: "default"
+  personality: null
+
+tools:
+  tool_timeout: 30
+  max_retries: 3
+  inherit_from_parent: true
+  allowed_tools: []
+  tool_descriptions: {}
 
 personalities:
   default_personality: "default"
@@ -125,13 +214,6 @@ personalities:
       constraints: []
       system_prompt: ""
       examples: []
-      enabled: true
+      enabled: false
       file_path: null
       use_by_default: true
-
-tools:
-  tool_timeout: 30
-  max_retries: 3
-  inherit_from_parent: true
-  allowed_tools: []
-  tool_descriptions: {} 

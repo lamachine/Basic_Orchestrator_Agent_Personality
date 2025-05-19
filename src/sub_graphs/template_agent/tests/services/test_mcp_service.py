@@ -9,17 +9,18 @@ Tests for the Multi-agent Communication Protocol service, including:
 5. Error handling
 """
 
-import pytest
-import os
 import json
+import os
 import threading
 import time
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+from unittest.mock import MagicMock, Mock, patch
 
-from ...src.common.services.mcp_service import MCPService, PENDING_MCP_REQUESTS
+import pytest
+
 from ...src.common.services.db_service import DBService
+from ...src.common.services.mcp_service import PENDING_MCP_REQUESTS, MCPService
 
 
 @pytest.fixture
@@ -35,15 +36,12 @@ def test_config():
     """Create a test configuration."""
     return {
         "endpoints": {
-            "test_local": {
-                "url": "local",
-                "capabilities": ["test_capability"]
-            },
+            "test_local": {"url": "local", "capabilities": ["test_capability"]},
             "test_remote": {
                 "url": "https://test.example.com",
                 "capabilities": ["test_capability"],
                 "auth": {"api_key": "test_key"},
-                "headers": {"Accept": "application/json"}
+                "headers": {"Accept": "application/json"},
             },
             "brave_search": {
                 "url": "https://api.search.brave.com/search",
@@ -51,19 +49,19 @@ def test_config():
                 "capabilities": ["brave_web_search"],
                 "headers": {
                     "Accept": "application/json",
-                    "X-Subscription-Token": "test_brave_key"
-                }
-            }
+                    "X-Subscription-Token": "test_brave_key",
+                },
+            },
         },
         "timeout": 10,
-        "retry_attempts": 2
+        "retry_attempts": 2,
     }
 
 
 @pytest.fixture
 def mcp_service(mock_db_service, test_config):
     """Create a test MCP service with the test configuration."""
-    with patch.object(MCPService, '_load_config', return_value=test_config):
+    with patch.object(MCPService, "_load_config", return_value=test_config):
         with patch.dict(os.environ, {"USE_AS_MCP_SERVER": "true"}):
             service = MCPService(mock_db_service)
             # Clear any pending requests from previous tests
@@ -74,7 +72,7 @@ def mcp_service(mock_db_service, test_config):
 def test_initialization_enabled(mock_db_service, test_config):
     """Test service initialization when enabled."""
     with patch.dict(os.environ, {"USE_AS_MCP_SERVER": "true"}):
-        with patch.object(MCPService, '_load_config', return_value=test_config):
+        with patch.object(MCPService, "_load_config", return_value=test_config):
             service = MCPService(mock_db_service)
             assert service.enabled is True
             assert service.config == test_config
@@ -90,10 +88,7 @@ def test_initialization_disabled(mock_db_service):
 
 def test_load_config_with_defaults(mock_db_service):
     """Test loading configuration with defaults when no config file is provided."""
-    with patch.dict(os.environ, {
-        "USE_AS_MCP_SERVER": "true",
-        "BRAVE_API_KEY": "test_key"
-    }):
+    with patch.dict(os.environ, {"USE_AS_MCP_SERVER": "true", "BRAVE_API_KEY": "test_key"}):
         service = MCPService(mock_db_service)
         assert "endpoints" in service.config
         assert "brave_search" in service.config["endpoints"]
@@ -107,14 +102,14 @@ def test_load_config_with_file(mock_db_service, tmp_path):
         "endpoints": {
             "custom_endpoint": {
                 "url": "https://custom.example.com",
-                "capabilities": ["custom_capability"]
+                "capabilities": ["custom_capability"],
             }
         }
     }
-    
-    with open(config_file, 'w') as f:
+
+    with open(config_file, "w") as f:
         json.dump(test_config, f)
-    
+
     with patch.dict(os.environ, {"USE_AS_MCP_SERVER": "true"}):
         service = MCPService(mock_db_service, str(config_file))
         assert "custom_endpoint" in service.config["endpoints"]
@@ -151,7 +146,7 @@ async def test_call_mcp_invalid_capability(mcp_service):
 async def test_call_mcp_local_endpoint(mcp_service):
     """Test calling MCP with a local endpoint."""
     # Mock the _process_local_mcp_request method to avoid threading issues in tests
-    with patch.object(threading.Thread, 'start'):
+    with patch.object(threading.Thread, "start"):
         result = await mcp_service.call_mcp("test_local", "test_capability", {})
         assert result["status"] == "pending"
         assert "task_id" in result
@@ -162,7 +157,7 @@ async def test_call_mcp_local_endpoint(mcp_service):
 async def test_call_mcp_remote_endpoint(mcp_service):
     """Test calling MCP with a remote endpoint."""
     # Mock the _process_remote_mcp_request method to avoid threading issues in tests
-    with patch.object(threading.Thread, 'start'):
+    with patch.object(threading.Thread, "start"):
         result = await mcp_service.call_mcp("test_remote", "test_capability", {})
         assert result["status"] == "pending"
         assert "task_id" in result
@@ -178,17 +173,17 @@ async def test_process_local_mcp_request_postgres(mcp_service, mock_db_service):
         "status": "pending",
         "endpoint": "postgres",
         "capability": "query",
-        "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    
+
     # Call the method directly since it's normally called in a thread
     await mcp_service._process_local_mcp_request(
         "postgres", "query", {"sql": "SELECT * FROM test"}, task_id
     )
-    
+
     # Verify the DB service was called
     mock_db_service.execute_query.assert_called_once_with("SELECT * FROM test")
-    
+
     # Check the request was updated
     assert PENDING_MCP_REQUESTS[task_id]["status"] == "completed"
 
@@ -202,14 +197,12 @@ async def test_process_local_mcp_request_unsupported(mcp_service):
         "status": "pending",
         "endpoint": "unsupported",
         "capability": "test",
-        "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    
+
     # Call the method directly
-    await mcp_service._process_local_mcp_request(
-        "unsupported", "test", {}, task_id
-    )
-    
+    await mcp_service._process_local_mcp_request("unsupported", "test", {}, task_id)
+
     # Check the request was updated with an error
     assert PENDING_MCP_REQUESTS[task_id]["status"] == "error"
     assert "Unsupported local MCP endpoint" in PENDING_MCP_REQUESTS[task_id]["error"]
@@ -224,15 +217,15 @@ async def test_process_remote_mcp_request_success(mcp_service):
         "status": "pending",
         "endpoint": "test_remote",
         "capability": "test_capability",
-        "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    
+
     # Mock successful HTTP request
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"status": "success", "data": "test result"}
-    
-    with patch('requests.Session.post', return_value=mock_response):
+
+    with patch("requests.Session.post", return_value=mock_response):
         # Call the method directly
         mcp_service._process_remote_mcp_request(
             "https://test.example.com/mcp/test_capability",
@@ -240,12 +233,12 @@ async def test_process_remote_mcp_request_success(mcp_service):
             {"param": "value"},
             task_id,
             "test_remote",
-            "test_capability"
+            "test_capability",
         )
-        
+
         # Sleep briefly to let the thread complete
         time.sleep(0.1)
-        
+
         # Check the request was updated
         assert PENDING_MCP_REQUESTS[task_id]["status"] == "completed"
         assert PENDING_MCP_REQUESTS[task_id]["result"]["status"] == "success"
@@ -260,11 +253,11 @@ async def test_process_remote_mcp_request_error(mcp_service):
         "status": "pending",
         "endpoint": "test_remote",
         "capability": "test_capability",
-        "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    
+
     # Mock HTTP request error
-    with patch('requests.Session.post', side_effect=Exception("Test error")):
+    with patch("requests.Session.post", side_effect=Exception("Test error")):
         # Call the method directly
         mcp_service._process_remote_mcp_request(
             "https://test.example.com/mcp/test_capability",
@@ -272,12 +265,12 @@ async def test_process_remote_mcp_request_error(mcp_service):
             {"param": "value"},
             task_id,
             "test_remote",
-            "test_capability"
+            "test_capability",
         )
-        
+
         # Sleep briefly to let the thread complete
         time.sleep(0.1)
-        
+
         # Check the request was updated with an error
         assert PENDING_MCP_REQUESTS[task_id]["status"] == "error"
         assert "Test error" in PENDING_MCP_REQUESTS[task_id]["error"]
@@ -294,9 +287,9 @@ async def test_check_status_completed(mcp_service):
         "capability": "test_capability",
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "completed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "result": {"status": "success", "data": "test result"}
+        "result": {"status": "success", "data": "test result"},
     }
-    
+
     result = await mcp_service.check_status(task_id)
     assert result["status"] == "completed"
     assert result["task_id"] == task_id
@@ -320,10 +313,10 @@ async def test_check_status_pending(mcp_service):
         "status": "pending",
         "endpoint": "test_remote",
         "capability": "test_capability",
-        "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    
+
     result = await mcp_service.check_status(task_id)
     assert result["status"] == "pending"
     assert result["task_id"] == task_id
-    assert "started_at" in result 
+    assert "started_at" in result

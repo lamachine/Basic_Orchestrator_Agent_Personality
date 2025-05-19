@@ -22,4 +22,4 @@ tenacity
 
 # Logging and monitoring
 structlog
-prometheus-client 
+prometheus-client

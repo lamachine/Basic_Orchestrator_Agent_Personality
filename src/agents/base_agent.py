@@ -6,7 +6,7 @@ specialized agents in the system. It implements core functionality needed by any
 
 1. Configuration Management - Loading and validating agent settings
 2. Database Integration - Connecting to and querying persistent storage
-3. Conversation Management - Tracking and updating conversation state 
+3. Conversation Management - Tracking and updating conversation state
 4. Session Handling - Managing unique user sessions and context
 5. Tool Registration - Standardized interface for tool discovery and execution
 6. Error Handling - Common error handling and logging patterns
@@ -21,29 +21,33 @@ coordinates their interactions in a flexible workflow.
 
 Required configs
 - LLM service config
-- 
+-
 """
 
 import logging
 import uuid
-from typing import Optional, Dict, Any
 from datetime import datetime
-from src.tools.tool_registry import ToolRegistry
+from typing import Any, Dict, Optional
+
 from src.services.llm_service import LLMService
 from src.services.logging_service import get_logger
 from src.state.state_models import MessageRole
+from src.tools.tool_registry import ToolRegistry
 
 logger = get_logger(__name__)
 
+
 class BaseAgent:
     """Base class for all agents, encapsulating logging, tool registry, db, llm, and prompt logic."""
-    def __init__(self, 
-                 name: str, 
-                 prompt_section: str = "", 
-                 api_url: str = None, 
-                 model: str = None, 
-                 config=None
-                 ):
+
+    def __init__(
+        self,
+        name: str,
+        prompt_section: str = "",
+        api_url: str = None,
+        model: str = None,
+        config=None,
+    ):
         self.name = name
         self.logger = logging.getLogger(f"orchestrator.{name}")
         self.tool_registry = ToolRegistry()
@@ -53,7 +57,9 @@ class BaseAgent:
 
         # Initialize LLM service if URL and model provided
         if api_url is not None and model is not None:
-            logger.debug(f"base_agent.py:BaseAgent: Getting LLM service instance for {name} with {api_url} and {model}")
+            logger.debug(
+                f"base_agent.py:BaseAgent: Getting LLM service instance for {name} with {api_url} and {model}"
+            )
             self.llm = LLMService.get_instance(api_url, model)
         else:
             self.llm = None
@@ -73,7 +79,7 @@ class BaseAgent:
         """Basic LLM query with error handling."""
         if not self.llm:
             return "Error: LLM service not initialized"
-            
+
         try:
             # self.logger.debug(f"BaseAgent.query_llm: Prompt being sent to LLM:\n{prompt}")
             return await self.llm.generate(prompt)
@@ -85,7 +91,7 @@ class BaseAgent:
         """Basic chat implementation that subclasses can override."""
         try:
             # Log that we're sending to LLM
-            if hasattr(self, 'graph_state') and "conversation_state" in self.graph_state:
+            if hasattr(self, "graph_state") and "conversation_state" in self.graph_state:
                 await self.graph_state["conversation_state"].add_message(
                     role=MessageRole.SYSTEM,
                     content=f"Sending query to LLM",
@@ -93,17 +99,17 @@ class BaseAgent:
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "llm_query",
                         "model": self.model,
-                        "session_id": self.session_id
+                        "session_id": self.session_id,
                     },
                     sender=f"orchestrator_graph.{self.name}",
-                    target="orchestrator_graph.llm"
+                    target="orchestrator_graph.llm",
                 )
 
             # Get response from LLM
             response = await self.query_llm(user_input)
 
             # Log LLM's response
-            if hasattr(self, 'graph_state') and "conversation_state" in self.graph_state:
+            if hasattr(self, "graph_state") and "conversation_state" in self.graph_state:
                 await self.graph_state["conversation_state"].add_message(
                     role=MessageRole.ASSISTANT,
                     content=response,
@@ -111,13 +117,13 @@ class BaseAgent:
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "llm_response",
                         "model": self.model,
-                        "session_id": self.session_id
+                        "session_id": self.session_id,
                     },
                     sender="orchestrator_graph.llm",
-                    target=f"orchestrator_graph.{self.name}"
+                    target=f"orchestrator_graph.{self.name}",
                 )
 
             return {"response": response, "status": "success"}
         except Exception as e:
             self.logger.error(f"Error in chat: {e}")
-            return {"response": f"Error: {str(e)}", "status": "error"} 
+            return {"response": f"Error: {str(e)}", "status": "error"}

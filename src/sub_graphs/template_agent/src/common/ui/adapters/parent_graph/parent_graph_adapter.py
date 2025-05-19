@@ -5,31 +5,32 @@ This module provides the parent graph adapter implementation for the template ag
 It handles communication between the template agent and its parent graph.
 """
 
-from typing import Dict, Any, Optional, List, Set
-import logging
 import asyncio
 import json
-import uuid
-import time
-from datetime import datetime
+import logging
 import os
+import time
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
 
-from ..base_interface import BaseInterface
-from ..state.state_models import Message, MessageRole, MessageType, MessageStatus
-from src.sub_graphs.template_agent.src.common.services.logging_service import get_logger
+from ....services.logging_service import get_logger
+from ....state.state_models import Message, MessageRole, MessageStatus, MessageType
+from ...base_interface import BaseInterface
 
 logger = get_logger(__name__)
 
 # Dictionary to store pending sub-graph requests
 PENDING_SUBGRAPH_REQUESTS = {}
 
+
 class ParentGraphAdapter(BaseInterface):
     """Parent graph adapter for template agent communication."""
-    
+
     def __init__(self, config: Dict[str, Any] = None):
         """
         Initialize the parent graph adapter.
-        
+
         Args:
             config: Optional configuration dictionary
         """
@@ -39,7 +40,7 @@ class ParentGraphAdapter(BaseInterface):
         self.displayed_tools: Set[str] = set()  # Track displayed tool results
         self._tool_checker_task = None
         self._setup_parent_graph()
-    
+
     def _setup_parent_graph(self):
         """Set up parent graph connection and configuration."""
         try:
@@ -48,14 +49,14 @@ class ParentGraphAdapter(BaseInterface):
                 "parent_graph_id": os.getenv("PARENT_GRAPH_ID", "orchestrator"),
                 "sub_graph_id": os.getenv("SUB_GRAPH_ID", "template_agent"),
                 "message_queue": asyncio.Queue(),  # Queue for message passing
-                "timeout": 30  # Default timeout in seconds
+                "timeout": 30,  # Default timeout in seconds
             }
             logger.debug("Setting up parent graph connection")
             self.running = True
         except Exception as e:
             logger.error(f"Error setting up parent graph: {e}")
             raise
-    
+
     async def start(self) -> None:
         """Start the parent graph adapter and tool checker."""
         try:
@@ -69,13 +70,13 @@ class ParentGraphAdapter(BaseInterface):
                     await self._tool_checker_task
                 except asyncio.CancelledError:
                     pass
-    
+
     def stop(self) -> None:
         """Stop the parent graph adapter."""
         self.running = False
         if self._tool_checker_task:
             self._tool_checker_task.cancel()
-    
+
     async def _check_tool_completions(self) -> None:
         """
         Background task that checks for completed tools and processes their results.
@@ -89,93 +90,103 @@ class ParentGraphAdapter(BaseInterface):
                         # Process completed request
                         result = request.get("result", {})
                         error = request.get("error")
-                        
+
                         if error:
                             logger.error(f"Sub-graph request {task_id} failed: {error}")
                         else:
                             logger.debug(f"Sub-graph request {task_id} completed: {result}")
-                            
+
                         # Mark as displayed
                         self.displayed_tools.add(task_id)
-                        
+
                         # If agent has a tool completion handler, call it
                         if hasattr(self.agent, "handle_tool_completion"):
                             await self.agent.handle_tool_completion(task_id, result)
-                
+
                 await asyncio.sleep(self.tool_check_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in tool checker: {e}", exc_info=True)
                 await asyncio.sleep(1.0)  # Wait longer on error
-    
+
     async def send_message(self, message: Message) -> bool:
         """
         Send a message to the parent graph.
-        
+
         Args:
             message: Message to send
-            
+
         Returns:
             bool: True if message was sent successfully
         """
         try:
             # Generate task ID for tracking
             task_id = str(uuid.uuid4())
-            
+
+            # Extract parent request ID from metadata if present
+            parent_request_id = message.metadata.get("parent_request_id")
+
             # Initialize pending request
             PENDING_SUBGRAPH_REQUESTS[task_id] = {
                 "task_id": task_id,
                 "status": "pending",
-                "started_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "parent_request_id": parent_request_id,
             }
-            
+
             # Format message for parent graph
             subgraph_message = {
                 "type": "subgraph_message",
-                "id": task_id,
+                "id": (
+                    parent_request_id if parent_request_id else task_id
+                ),  # Use parent ID if available
                 "content": message.content,
                 "role": message.role.value,
                 "message_type": message.type.value,
                 "metadata": {
                     "timestamp": datetime.now().isoformat(),
-                    "session_id": getattr(self.agent, 'session_id', None),
+                    "session_id": getattr(self.agent, "session_id", None),
                     "interface": "parent_graph",
                     "sub_graph_id": self.config["sub_graph_id"],
-                    "parent_graph_id": self.config["parent_graph_id"]
-                }
+                    "parent_graph_id": self.config["parent_graph_id"],
+                },
             }
-            
+
             # Add message to conversation state if available
-            if hasattr(self.agent, 'graph_state') and "conversation_state" in self.agent.graph_state:
+            if (
+                hasattr(self.agent, "graph_state")
+                and "conversation_state" in self.agent.graph_state
+            ):
                 await self.agent.graph_state["conversation_state"].add_message(
                     message.role,
                     message.content,
                     metadata={
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "parent_graph_message",
-                        "session_id": getattr(self.agent, 'session_id', None),
+                        "session_id": getattr(self.agent, "session_id", None),
                         "interface": "parent_graph",
                         "sub_graph_id": self.config["sub_graph_id"],
-                        "parent_graph_id": self.config["parent_graph_id"]
+                        "parent_graph_id": self.config["parent_graph_id"],
+                        "request_id": (parent_request_id if parent_request_id else task_id),
                     },
-                    sender='template_agent',
-                    target='parent_graph'
+                    sender="template_agent",
+                    target="parent_graph",
                 )
-            
+
             # Send message through queue
             await self.config["message_queue"].put(subgraph_message)
             logger.debug(f"Sent message to parent graph: {subgraph_message}")
-            
+
             return True
         except Exception as e:
             logger.error(f"Error sending message to parent graph: {e}")
             return False
-    
+
     async def receive_message(self) -> Optional[Message]:
         """
         Receive a message from the parent graph.
-        
+
         Returns:
             Optional[Message]: Received message or None if no message available
         """
@@ -183,23 +194,29 @@ class ParentGraphAdapter(BaseInterface):
             # Check message queue
             if not self.config["message_queue"].empty():
                 message_data = await self.config["message_queue"].get()
-                
+
+                # Extract request ID and store as parent request ID in metadata
+                request_id = message_data.get("id")
+                metadata = message_data.get("metadata", {})
+                if request_id:
+                    metadata["parent_request_id"] = request_id
+
                 # Convert to Message object
                 message = Message(
                     content=message_data["content"],
                     role=MessageRole(message_data["role"]),
                     type=MessageType(message_data["message_type"]),
-                    metadata=message_data["metadata"]
+                    metadata=metadata,
                 )
-                
+
                 logger.debug(f"Received message from parent graph: {message}")
                 return message
-                
+
             return None
         except Exception as e:
             logger.error(f"Error receiving message from parent graph: {e}")
             return None
-    
+
     async def close(self):
         """Close the parent graph connection."""
         try:
@@ -210,16 +227,16 @@ class ParentGraphAdapter(BaseInterface):
             logger.debug("Closing parent graph connection")
         except Exception as e:
             logger.error(f"Error closing parent graph connection: {e}")
-    
+
     def is_connected(self) -> bool:
         """
         Check if the parent graph connection is active.
-        
+
         Returns:
             bool: True if connected
         """
         return self.running
-    
+
     async def _main_loop(self) -> None:
         """Run the main message processing loop."""
         while self.running:
@@ -231,11 +248,11 @@ class ParentGraphAdapter(BaseInterface):
             except Exception as e:
                 logger.error(f"Error in main loop: {e}", exc_info=True)
                 await asyncio.sleep(1.0)  # Wait longer on error
-    
+
     async def process_message(self, message: Message) -> None:
         """
         Process a received message.
-        
+
         Args:
             message: The message to process
         """
@@ -246,12 +263,14 @@ class ParentGraphAdapter(BaseInterface):
                 if hasattr(self.agent, "handle_tool_request"):
                     result = await self.agent.handle_tool_request(message)
                     # Send result back to parent
-                    await self.send_message(Message(
-                        content=json.dumps(result),
-                        role=MessageRole.ASSISTANT,
-                        type=MessageType.TOOL_RESPONSE,
-                        metadata=message.metadata
-                    ))
+                    await self.send_message(
+                        Message(
+                            content=json.dumps(result),
+                            role=MessageRole.ASSISTANT,
+                            type=MessageType.TOOL_RESPONSE,
+                            metadata=message.metadata,
+                        )
+                    )
             elif message.type == MessageType.COMMAND:
                 # Handle command from parent
                 if hasattr(self.agent, "handle_command"):
@@ -259,6 +278,6 @@ class ParentGraphAdapter(BaseInterface):
             else:
                 # Handle regular message
                 logger.debug(f"Processing parent graph message: {message}")
-                
+
         except Exception as e:
-            logger.error(f"Error processing message: {e}") 
+            logger.error(f"Error processing message: {e}")

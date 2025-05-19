@@ -13,4 +13,4 @@ services:
       - SUPABASE_KEY=${SUPABASE_KEY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    restart: unless-stopped 
+    restart: unless-stopped

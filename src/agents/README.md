@@ -78,4 +78,4 @@ The agent system includes robust error handling for:
 - **LLM API Failures**: Retrying and degrading gracefully
 - **Tool Execution Errors**: Capturing and reporting issues
 - **Database Problems**: Maintaining operation with limited persistence
-- **Conversation State Errors**: Recovering from invalid state transitions 
+- **Conversation State Errors**: Recovering from invalid state transitions

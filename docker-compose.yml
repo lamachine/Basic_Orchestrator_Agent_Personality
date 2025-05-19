@@ -26,4 +26,4 @@ services:
       - supabase-db
 
 volumes:
-  supabase-data: 
+  supabase-data:

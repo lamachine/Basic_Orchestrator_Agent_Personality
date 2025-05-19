@@ -3,17 +3,21 @@
 import asyncio
 import json
 import logging
+
 from graphs.personal_assistant_graph import personal_assistant_graph
-from state.state_models import GraphState
 from services.logging_service import get_logger, setup_logging
+from state.state_models import GraphState
 
 # Set up logging with debug level for both file and console
-setup_logging({
-    'file_level': 'DEBUG',
-    'console_level': 'DEBUG',
-})
+setup_logging(
+    {
+        "file_level": "DEBUG",
+        "console_level": "DEBUG",
+    }
+)
 
 logger = get_logger(__name__)
+
 
 async def main():
     """Run the personal assistant."""
@@ -26,7 +30,7 @@ async def main():
             current_task=None,
             task_history=[],
             agent_results={},
-            final_result=None
+            final_result=None,
         )
 
         # Create email parameters
@@ -34,30 +38,29 @@ async def main():
             "action": "send",
             "to": "test@example.com",
             "subject": "Test Email",
-            "body": "This is a test email from the personal assistant."
+            "body": "This is a test email from the personal assistant.",
         }
 
         # Create request in the format expected by personal_assistant_graph
-        request = {
-            "task": json.dumps(email_params)
-        }
-        
+        request = {"task": json.dumps(email_params)}
+
         logger.debug(f"Processing email request with parameters: {request}")
 
         # Process request through personal assistant graph
         result = await personal_assistant_graph(state, request)
-        
+
         if result.get("success"):
             logger.debug("Email request processed successfully")
             logger.debug(f"Result: {result}")
         else:
             logger.error(f"Failed to process email request: {result.get('error')}")
-            
+
         return result
 
     except Exception as e:
         logger.error(f"Error in main: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
+
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

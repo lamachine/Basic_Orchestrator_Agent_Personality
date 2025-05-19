@@ -1,55 +1,16 @@
 """
-State management module for the template agent.
+Template Agent State package.
 
-This module provides classes and functions for managing stateful interactions 
-including session state, message history, and task tracking.
+This package contains state management components for the template agent.
 """
 
-from .state_models import (
-    Message,
-    MessageRole,
-    MessageType,
-    MessageStatus,
-    TaskStatus,
-    MessageState,
-    GraphState
-)
-
-from .state_manager import StateManager
-
-from .state_errors import (
-    StateError,
-    ValidationError,
-    StateUpdateError,
-    StateTransitionError,
-    MessageError,
-    TaskError,
-    AgentStateError,
-    PersistenceError
-)
-
-from .state_validator import StateValidator
-
-# Alias for backward compatibility
-SessionState = MessageState
+from .state_models import GraphState, Message, MessageRole, MessageState, MessageStatus, MessageType
 
 __all__ = [
-    'Message',
-    'MessageRole',
-    'MessageType',
-    'MessageStatus',
-    'TaskStatus',
-    'MessageState',
-    'SessionState',
-    'GraphState',
-    'StateManager',
-    'StateError',
-    'ValidationError',
-    'StateUpdateError',
-    'StateTransitionError',
-    'MessageError',
-    'TaskError',
-    'AgentStateError',
-    'PersistenceError',
-    'StateValidator'
-] 
+    "Message",
+    "MessageType",
+    "MessageStatus",
+    "MessageState",
+    "MessageRole",
+    "GraphState",
+]

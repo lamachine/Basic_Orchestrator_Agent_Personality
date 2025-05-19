@@ -75,5 +75,3 @@ Testing Guidelines: Concise key points or a reference to a separate testing docu
 - Maintain clear documentation including setup instructions, Supabase schema, RLS policies, and Edge Functions.
 
 *Load these project rules into your settings as the development guidelines.*
-
-

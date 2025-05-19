@@ -5,7 +5,7 @@
 
 #### 2. Tools and Agents as Separate Nodes
 - **Objective**: Separate tools and agents into distinct modules.
-- **Background**:  This graph has been greatly simplified.  Rather than multiple agents and many choices, there is only one real agent and tools that act like agents but have no LLM access.  Each of them will actually spawn a subgraph with that agents functions and tools.  Standard tools for customizing each agent's graph will be added in the standard way, as will specialized agents for certain specific tasks or testing.  The orchestrator is the template for all graphs but has the added function of interfacing with the user while the other agents are orchestrated by this main or central graph.  
+- **Background**:  This graph has been greatly simplified.  Rather than multiple agents and many choices, there is only one real agent and tools that act like agents but have no LLM access.  Each of them will actually spawn a subgraph with that agents functions and tools.  Standard tools for customizing each agent's graph will be added in the standard way, as will specialized agents for certain specific tasks or testing.  The orchestrator is the template for all graphs but has the added function of interfacing with the user while the other agents are orchestrated by this main or central graph.
 - **Action**:
   - Use the existing directories `src/tools/` and `src/agents/`.
   - Move tool-related code to `src/tools/` and agent-related code to `src/agents/`.
@@ -16,15 +16,15 @@
     - **Edge Case**: Test with boundary values or unexpected inputs.
 
 #### x.  Separate all configuration from structure?
-- **Objective**: Investigate the possiblity of have support modules and config modules just like we have tool modules.  Make a configuration that pulls all orchestrator specific code out, so there is just one graph instead of one for tools and one for orchestrator.  
-- **Background**:  This is a standard way to organize code.  The LLM, logging, and database will be moved into their own respective services.  Additional LLM and database services will be added but local Ollama and Supabase services will remain primary.  
+- **Objective**: Investigate the possiblity of have support modules and config modules just like we have tool modules.  Make a configuration that pulls all orchestrator specific code out, so there is just one graph instead of one for tools and one for orchestrator.
+- **Background**:  This is a standard way to organize code.  The LLM, logging, and database will be moved into their own respective services.  Additional LLM and database services will be added but local Ollama and Supabase services will remain primary.
 - **Action**:
-  - Investigate how complex this would be to implement, and when.  
-  - One single set of instrucitons, and possibly one very generic "tool" that will walk through the setup options, i.e. LLM, database, logging location, personality options, state, etc.  
+  - Investigate how complex this would be to implement, and when.
+  - One single set of instrucitons, and possibly one very generic "tool" that will walk through the setup options, i.e. LLM, database, logging location, personality options, state, etc.
 
 #### 3. LLM, Logging, and DB Services
 - **Objective**: Organize LLM, logging, and database code into service modules.
-- **Background**:  This is a standard way to organize code.  The LLM, logging, and database will be moved into their own respective services.  Additional LLM and database services will be added but local Ollama and Supabase services will remain primary.  
+- **Background**:  This is a standard way to organize code.  The LLM, logging, and database will be moved into their own respective services.  Additional LLM and database services will be added but local Ollama and Supabase services will remain primary.
 - **Action**:
   - Use the existing directories `src/services/llm_services/`, `src/services/logging_services/`, and `src/services/db_services/`.
   - Move LLM-related code to `src/services/llm_services/`, logging setup to `src/services/logging_services/`, and database management to `src/services/db_services/`.
@@ -66,16 +66,16 @@ Next steps:
   - personalities in orchestrator
   - clean up extra stuff in Basic_Orchestrator_Agent_Personality
   - more discrete tool files separation, needs discussion with AI
-  - add more memory for prompts for Ollama 
+  - add more memory for prompts for Ollama
   - implement a real UI - If it has to be event driven, add a dashboard for agent status with lights.
   - test mcp client
-  - learn to chain tool and agent tasks for complex workflows and discussions. 
-  - implement mem0 memories for me, Julie, Patrick, Rory, and the key agents.  
-  - we were trying to implement brave search, but it is not launching the docker container.  The docker container tries to launch with port 8000 but KONG is already using that port.  We need to change the port to something else.  
+  - learn to chain tool and agent tasks for complex workflows and discussions.
+  - implement mem0 memories for me, Julie, Patrick, Rory, and the key agents.
+  - we were trying to implement brave search, but it is not launching the docker container.  The docker container tries to launch with port 8000 but KONG is already using that port.  We need to change the port to something else.
   - Need to add a list of used ports to the project status.md file.
-  
 
-Get rid of dual request tracking system.  
+
+Get rid of dual request tracking system.
 
 CLI is event driven from the prompt.  We will need to change to use queues.  Otherwise everything stops.
 
@@ -85,9 +85,9 @@ CLI is event driven from the prompt.  We will need to change to use queues.  Oth
 
 ***Build a plan to integrate scrapers into the orchestrator.***
 
-Build a list of folders and files from craw4AI-agent-mod 
-Compare that to what we probably need for the current project.  
-Copy wholesale any code that we can use.  
+Build a list of folders and files from craw4AI-agent-mod
+Compare that to what we probably need for the current project.
+Copy wholesale any code that we can use.
 
 ## Scraper Integration Plan
 
@@ -366,7 +366,7 @@ Let's create a simple example of a git tool using MCP:
   Looks like a complete array of tools, not sure what make it "simple"
 
 Now, let's add a simple database query service for the MCP to use:
-  Seems like duplicate functions to what we already have. 
+  Seems like duplicate functions to what we already have.
 
 I've now implemented a complete MCP adapter for the orchestrator system. Here's a summary of the changes made:
 - MCP Adapter Layer:
@@ -404,12 +404,12 @@ The MCP implementation follows the same asynchronous pattern as the existing too
 
 There will be two key parts to this process.  First is to confirm fully compliant MCP client within the orchestrator.  Second is to create a new MCP client using a template from https://github.com/coleam00/mcp-mem0
 
-References: 
+References:
 - https://github.com/coleam00/mcp-mem0
 - https://modelcontextprotocol.io/introduction
 
 To build servers in cursor:   DOCKER build highly recommended.  See ReadMe.md for details.
-- prompt 
+- prompt
   """
   Use the mcp docs @mcp for reference and context.
   Use the Python MCP Server Template below as an example for the MCP server you are about to build.
@@ -434,7 +434,7 @@ To build servers in cursor:   DOCKER build highly recommended.  See ReadMe.md fo
       API_KEY_NAME=
       API_KEY_IN=
       API_KEY_LOCATION=
-      
+
     )
 - define mcp tools
   - @mcp.tool()
@@ -462,7 +462,7 @@ To build servers in cursor:   DOCKER build highly recommended.  See ReadMe.md fo
               # Run the server with SSE transport
               await mcp.run_stdio_async()
           else:
-              # Run the server with stdio transport   
+              # Run the server with stdio transport
           await transport.run_stdio_async() # runs over network internal or external with http post style comms.
 
 
@@ -649,7 +649,7 @@ Let's work through this checklist step by step!
   - [x] Remove UI-specific code
   - [x] Focus on core orchestration and LLM interaction
   - [x] Simplify to maintain single responsibility
-  
+
 - [x] Create interface framework (`src/ui/interface.py`):
   - [x] Define abstract base classes for all interface types
   - [x] Extract common UI utilities
@@ -677,7 +677,7 @@ Let's work through this checklist step by step!
   - [x] Configuration loading
   - [x] Service initialization
   - [x] Interface selection
-  
+
 - [x] Create specific entry points:
   - [x] `src/run_cli.py` - CLI-specific launcher
   - [ ] `src/run_server.py` - Server mode launcher
@@ -689,7 +689,7 @@ Let's work through this checklist step by step!
   - [x] Test each interface implementation
   - [x] Test tool processing
   - [x] Test I/O adapters
-  
+
 - [x] Update documentation:
   - [x] Add docstrings to all new modules
   - [x] Create README.md for each new directory
@@ -700,7 +700,7 @@ Let's work through this checklist step by step!
   - [ ] Test core agent with each interface
   - [ ] Verify tool processing works with all interfaces
   - [ ] Ensure state is properly maintained
-  
+
 - [ ] Clean up codebase:
   - [ ] Remove duplicate code
   - [ ] Standardize naming conventions
@@ -769,13 +769,13 @@ Check test coverage: Ensure tests cover the refactored code properly, particular
 - [ ] Optimize supabase
 ```sql
 # Use efficient indexing
-CREATE INDEX idx_memories_vector ON memories 
-USING ivfflat (embedding vector_cosine_ops) 
+CREATE INDEX idx_memories_vector ON memories
+USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 
 # Use materialized views for frequently accessed data
 CREATE MATERIALIZED VIEW recent_memories AS
-SELECT * FROM memories 
+SELECT * FROM memories
 WHERE created_at > NOW() - INTERVAL '24 hours';
 ```
 
@@ -902,21 +902,21 @@ def add_memory(self, content: Union[str, List[Dict]], user_id: str, metadata: Op
     try:
         # Extract facts using LLM
         facts = self.memory.extract_facts(content)
-        
+
         # Add metadata
         full_metadata = {
             **(metadata or {}),
             "extracted_facts": facts,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         # Store in hybrid system
         result = self.memory.add(
             content,
             user_id=user_id,
             metadata=full_metadata
         )
-        
+
         return {
             "success": True,
             "memory_id": result["id"],
@@ -939,21 +939,21 @@ def search_memories(self, query: str, user_id: str, limit: int = 5) -> Dict[str,
             user_id=user_id,
             limit=limit
         )
-        
+
         # Graph search for related memories
         graph_results = self.memory.graph_search(
             query,
             user_id=user_id,
             limit=limit
         )
-        
+
         # Combine and rank results
         all_results = self._merge_and_rank_results(
             vector_results,
             graph_results,
             limit=limit
         )
-        
+
         return {
             "success": True,
             "results": all_results
@@ -1209,6 +1209,6 @@ This approach keeps the separation between services and managers while clarifyin
 
 
 
-ToDo, each package must have full services, managers and tools to stand alone, but must pull from parent if we want to inherit.  We have switched to full relative imports, but this will take some more thought.  
+ToDo, each package must have full services, managers and tools to stand alone, but must pull from parent if we want to inherit.  We have switched to full relative imports, but this will take some more thought.
 
 # TODO: Investigate swapping mem0 storage and vector search to swarm_message table

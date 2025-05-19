@@ -5,23 +5,26 @@ This module implements the manager layer for LLM operations. As a manager (not a
 
 """
 
-import os
 import asyncio
-from typing import Dict, Any, List, Optional, Tuple
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from supabase import Client
-from openai import AsyncOpenAI
+from typing import Any, Dict, List, Optional, Tuple
 
+from openai import AsyncOpenAI
+from supabase import Client
+
+from src.config.llm_config import get_provider_config
 from src.services.llm_service import LLMService
 from src.services.logging_service import get_logger
-from src.config.llm_config import get_provider_config
 
 logger = get_logger(__name__)
+
 
 @dataclass
 class LLMUsageStats:
     """Track LLM usage statistics."""
+
     total_requests: int = 0
     total_tokens: int = 0
     total_errors: int = 0
@@ -29,13 +32,14 @@ class LLMUsageStats:
     average_latency: float = 0.0
     request_history: List[Dict[str, Any]] = field(default_factory=list)
 
+
 class LLMManager:
     """Manager for LLM operations and state."""
-    
+
     def __init__(self, api_url: str, model: str):
         """
         Initialize LLM manager.
-        
+
         Args:
             api_url: API endpoint URL
             model: Model identifier
@@ -44,6 +48,7 @@ class LLMManager:
         self.stats = LLMUsageStats()
         self.cache: Dict[str, Tuple[str, datetime]] = {}
         self.lock = asyncio.Lock()
+
 
 # Dependency dataclass for Pydantic AI
 @dataclass

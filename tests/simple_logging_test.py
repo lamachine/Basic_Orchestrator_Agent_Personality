@@ -2,16 +2,16 @@ import logging
 import os
 
 # Create a debug folder if it doesn't exist
-os.makedirs('debug', exist_ok=True)
+os.makedirs("debug", exist_ok=True)
 
 # Configure logging to write to a file
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('debug/log_test.log', mode='a'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler("debug/log_test.log", mode="a"),
+        logging.StreamHandler(),
+    ],
 )
 
 # Log a test message

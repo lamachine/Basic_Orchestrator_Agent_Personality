@@ -1,6 +1,6 @@
 ---
 description: These are the rules for AI SDK and Model management
-globs: 
+globs:
 ---
 ## AI SDK and Model Management
 - Use Pydantic for all AI interactions.

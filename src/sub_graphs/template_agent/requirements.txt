@@ -23,4 +23,4 @@ mem0
 
 # Logging and monitoring
 structlog
-prometheus-client 
+prometheus-client

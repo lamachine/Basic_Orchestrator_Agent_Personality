@@ -20,13 +20,13 @@ from ...common.graphs.template_graph import build_template_graph
 def build_specialty_graph() -> StateGraph:
     # Get base graph
     graph = build_template_graph()
-    
+
     # Add specialty nodes
     graph.add_node("specialty_node", specialty_node_function)
-    
+
     # Add specialty edges
     graph.add_edge("specialty_edge", specialty_edge_function)
-    
+
     return graph.compile()
 ```
 
@@ -50,4 +50,4 @@ graph.add_node("node_name", custom_node_function)
 2. Implement proper error handling and state management
 3. Document any custom nodes and edges
 4. Test graph functionality thoroughly
-5. Keep specialty logic separate from common functionality 
+5. Keep specialty logic separate from common functionality

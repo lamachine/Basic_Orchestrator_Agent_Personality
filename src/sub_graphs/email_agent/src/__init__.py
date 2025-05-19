@@ -1,1 +1,1 @@
-"""Personal Assistant agent source package.""" 
+"""Personal Assistant agent source package."""

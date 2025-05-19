@@ -25,45 +25,55 @@ LLM interactions without being concerned with higher-level workflow orchestratio
 specialized domain knowledge, which is handled by other components of the system.
 """
 
-from typing import Dict, Any, List, Optional
-from src.state.state_models import MessageRole
-from src.config import Configuration
-from src.agents.base_agent import BaseAgent
-from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS, format_completed_tools_prompt
-from src.services.logging_service import get_logger
-from src.tools.tool_processor import ToolProcessor
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from src.agents.base_agent import BaseAgent
+from src.config import Configuration
+from src.services.logging_service import get_logger
+from src.state.state_models import MessageRole
+from src.tools.orchestrator_tools import PENDING_TOOL_REQUESTS, format_completed_tools_prompt
+from src.tools.tool_processor import ToolProcessor
+
 logger = get_logger(__name__)
+
 
 class LLMQueryError(Exception):
     """Exception raised for errors in LLM query operations.
-    
+
     Attributes:
         message -- explanation of the error
         status_code -- HTTP status code if applicable
         response -- raw response from the LLM if available
     """
-    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[Any] = None):
+
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response: Optional[Any] = None,
+    ):
         self.message = message
         self.status_code = status_code
         self.response = response
         super().__init__(self.message)
 
+
 class LLMQueryAgent(BaseAgent):
     """Specialized agent for LLM interactions."""
-    
+
     def __init__(self, config: Configuration = None, personality_file: Optional[str] = None):
         """Initialize the LLM Query Agent."""
         if not config:
             config = Configuration()
-            
+
         super().__init__(
             name="llm_query",
-            api_url=config.llm['ollama'].api_url,
-            model=config.llm['ollama'].default_model,
-            config=config
+            api_url=config.llm["ollama"].api_url,
+            model=config.llm["ollama"].default_model,
+            config=config,
         )
-        
+
         self.tool_executor = ToolProcessor()
         logger.debug(f"Initialized LLM Query Agent with model: {self.model}")
 
@@ -76,9 +86,9 @@ class LLMQueryAgent(BaseAgent):
         try:
             # Generate prompt
             prompt = self.generate_prompt(user_input)
-            
+
             # Log sending to LLM
-            if hasattr(self, 'graph_state') and "conversation_state" in self.graph_state:
+            if hasattr(self, "graph_state") and "conversation_state" in self.graph_state:
                 await self.graph_state["conversation_state"].add_message(
                     role=MessageRole.SYSTEM,
                     content=f"Sending query to LLM",
@@ -86,17 +96,17 @@ class LLMQueryAgent(BaseAgent):
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "llm_query",
                         "model": self.model,
-                        "session_id": self.session_id
+                        "session_id": self.session_id,
                     },
                     sender="orchestrator_graph.llm_query",
-                    target="orchestrator_graph.llm"
+                    target="orchestrator_graph.llm",
                 )
-            
+
             # Get response from LLM
             response = await self.query_llm(prompt)
-            
+
             # Log LLM's response to LLM Query Agent
-            if hasattr(self, 'graph_state') and "conversation_state" in self.graph_state:
+            if hasattr(self, "graph_state") and "conversation_state" in self.graph_state:
                 await self.graph_state["conversation_state"].add_message(
                     role=MessageRole.ASSISTANT,
                     content=response,
@@ -104,17 +114,17 @@ class LLMQueryAgent(BaseAgent):
                         "timestamp": datetime.now().isoformat(),
                         "message_type": "llm_response",
                         "model": self.model,
-                        "session_id": self.session_id
+                        "session_id": self.session_id,
                     },
                     sender="orchestrator_graph.llm",
-                    target="orchestrator_graph.llm_query"
+                    target="orchestrator_graph.llm_query",
                 )
 
             # Process the response (check for tool calls, etc)
             processed_response = await self.process_response(response)
-            
+
             # Log sending processed response back to orchestrator
-            if hasattr(self, 'graph_state') and "conversation_state" in self.graph_state:
+            if hasattr(self, "graph_state") and "conversation_state" in self.graph_state:
                 await self.graph_state["conversation_state"].add_message(
                     role=MessageRole.ASSISTANT,
                     content=processed_response,
@@ -123,56 +133,50 @@ class LLMQueryAgent(BaseAgent):
                         "message_type": "processed_response",
                         "model": self.model,
                         "session_id": self.session_id,
-                        "has_tool_calls": bool(self.tool_parser.extract_tool_calls(response))
+                        "has_tool_calls": bool(self.tool_parser.extract_tool_calls(response)),
                     },
                     sender="orchestrator_graph.llm_query",
-                    target="orchestrator_graph.orchestrator"
+                    target="orchestrator_graph.orchestrator",
                 )
-            
-            return {
-                "response": processed_response,
-                "status": "success"
-            }
+
+            return {"response": processed_response, "status": "success"}
 
         except Exception as e:
             logger.error(f"Error in chat: {str(e)}")
-            return {
-                "response": str(e),
-                "status": "error"
-            }
+            return {"response": str(e), "status": "error"}
 
     async def query_llm(self, prompt: str) -> str:
         """
         Send a query to the LLM via Ollama API and return the response.
-        
+
         Args:
             prompt: The prompt to send to the LLM
-            
+
         Returns:
             The LLM's response text
-            
+
         Raises:
             LLMQueryError: If there is an error querying the LLM
         """
         try:
             logger.debug(f"Sending request to LLM for model: {self.model}")
-            
+
             # Use the LLM service that was initialized in the BaseAgent constructor
             if self.llm is None:
                 error_msg = "LLM service not initialized"
                 logger.error(error_msg)
                 raise LLMQueryError(error_msg)
-                
+
             # Call super().query_llm or directly use the llm service
             # logger.debug(f"llm_query_agent.query_llm: Calling super().query_llm with prompt: {prompt}")
             response_text = await super().query_llm(prompt)
             if not response_text:
                 raise LLMQueryError("Empty response received from LLM")
-                
+
             # logger.debig(f"llm_query_agent.query_llm: Received response from super().query_llm: {response_text}")
             logger.debug(f"Received LLM response of length {len(response_text)}")
             return response_text
-                
+
         except Exception as e:
             error_msg = f"Error querying LLM: {e}"
             logger.error(error_msg)
@@ -193,27 +197,21 @@ class LLMQueryAgent(BaseAgent):
         try:
             if not self.graph_state or "conversation_state" not in self.graph_state:
                 raise ValueError("Conversation state not initialized")
-            
+
             conversation_state = self.graph_state["conversation_state"]
             messages = []
-            
+
             # Convert conversation state messages to dict format for LLM
             for msg in conversation_state.messages:
-                messages.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
-            
+                messages.append({"role": msg.role, "content": msg.content})
+
             # Add system message if not present
             if not any(msg["role"] == MessageRole.SYSTEM for msg in messages):
-                messages.insert(0, {
-                    "role": MessageRole.SYSTEM,
-                    "content": self.system_prompt
-                })
-            
+                messages.insert(0, {"role": MessageRole.SYSTEM, "content": self.system_prompt})
+
             # Get response from LLM
             response = await self.llm.generate_text(messages=messages)
-            
+
             return response
 
         except Exception as e:
@@ -223,7 +221,7 @@ class LLMQueryAgent(BaseAgent):
     def store_tool_requests(self, execution_results: List[Dict[str, Any]]) -> None:
         """
         Store tool requests in the pending_requests dictionary.
-        
+
         Args:
             execution_results: List of tool execution results
         """
@@ -233,18 +231,20 @@ class LLMQueryAgent(BaseAgent):
                 if request_id:
                     # Store the original user input with the request
                     # This allows us to generate a proper follow-up when the tool completes
-                    self.pending_requests[request_id] = result.get("args", {}).get("task", "Unknown request")
+                    self.pending_requests[request_id] = result.get("args", {}).get(
+                        "task", "Unknown request"
+                    )
                     logger.debug(f"Stored request ID {request_id} in pending_requests")
-                    
+
             # Log the current status of pending requests for debugging
             pending_count = len(self.pending_requests)
             request_ids = list(self.pending_requests.keys())
             logger.debug(f"Current pending requests count: {pending_count}")
             logger.debug(f"Current pending request IDs: {request_ids}")
-            
+
         except Exception as e:
             logger.error(f"Error storing tool requests: {e}")
-            
+
     async def process_response(self, response: str) -> str:
         """
         Process the LLM's response, execute any tool calls, and return the formatted result.
@@ -265,7 +265,9 @@ class LLMQueryAgent(BaseAgent):
 
             # Store assistant's message in conversation state
             if self.graph_state and "conversation_state" in self.graph_state:
-                logger.debug(f"Adding assistant message to conversation state. Response type: {type(response)}")
+                logger.debug(
+                    f"Adding assistant message to conversation state. Response type: {type(response)}"
+                )
                 conversation_state = self.graph_state["conversation_state"]
                 logger.debug(f"Type of add_message method: {type(conversation_state.add_message)}")
                 await conversation_state.add_message(
@@ -275,10 +277,10 @@ class LLMQueryAgent(BaseAgent):
                         "timestamp": datetime.now().isoformat(),
                         "model": self.model,
                         "response_type": "llm_response",
-                        "session_id": self.session_id
+                        "session_id": self.session_id,
                     },
                     sender="orchestrator_graph.llm",
-                    target="orchestrator_graph.orchestrator"
+                    target="orchestrator_graph.orchestrator",
                 )
                 logger.debug("Successfully added assistant message")
 
@@ -292,7 +294,7 @@ class LLMQueryAgent(BaseAgent):
             tool_results = await self.handle_tool_calls(tool_calls)
             logger.debug(f"Got tool results type: {type(tool_results)}")
             formatted_response = self._format_tool_results(response, tool_results)
-            
+
             return formatted_response
 
         except Exception as e:
@@ -300,7 +302,9 @@ class LLMQueryAgent(BaseAgent):
             logger.error(error_msg, exc_info=True)
             raise
 
-    def _format_tool_results(self, original_response: str, tool_results: List[Dict[str, Any]]) -> str:
+    def _format_tool_results(
+        self, original_response: str, tool_results: List[Dict[str, Any]]
+    ) -> str:
         """
         Format tool execution results into a readable response.
 
@@ -320,36 +324,40 @@ class LLMQueryAgent(BaseAgent):
                 formatted_results.append(f"✅ {tool_name}: {result['result']}")
 
         if formatted_results:
-            return f"{original_response}\n\nTool Execution Results:\n" + "\n".join(formatted_results)
+            return f"{original_response}\n\nTool Execution Results:\n" + "\n".join(
+                formatted_results
+            )
 
-    def _apply_personality_to_tool_results(self, execution_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_personality_to_tool_results(
+        self, execution_results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Apply personality formatting to tool results.
-        
+
         Args:
             execution_results: List of tool execution results
-            
+
         Returns:
             List of formatted tool execution results
         """
-        if not self.personality_enabled or not hasattr(self, 'personality'):
+        if not self.personality_enabled or not hasattr(self, "personality"):
             return execution_results
-            
+
         try:
             formatted_results = []
             for result in execution_results:
                 # Only format if we have a result to work with
-                if 'result' in result:
+                if "result" in result:
                     # Apply personality formatting
-                    formatted_result = self.personality.format_tool_result(result['result'])
+                    formatted_result = self.personality.format_tool_result(result["result"])
                     # Update the result
                     result_copy = result.copy()
-                    result_copy['result'] = formatted_result
+                    result_copy["result"] = formatted_result
                     formatted_results.append(result_copy)
                 else:
                     # Pass through unchanged
                     formatted_results.append(result)
-                    
+
             return formatted_results
         except Exception as e:
             logger.error(f"Error applying personality to tool results: {e}")
@@ -359,10 +367,10 @@ class LLMQueryAgent(BaseAgent):
     def _is_conversation_end(self, text: str) -> bool:
         """
         Check if the user's message indicates an intent to end the conversation.
-        
+
         Args:
             text: The user's message text
-            
+
         Returns:
             True if the user wants to end the conversation, False otherwise
         """
@@ -372,39 +380,39 @@ class LLMQueryAgent(BaseAgent):
             "exit conversation",
             "close conversation",
             "quit conversation",
-            "goodbye", 
+            "goodbye",
             "bye",
             "exit",
-            "quit"
+            "quit",
         ]
-        
+
         text_lower = text.lower()
         for phrase in exit_phrases:
             if phrase in text_lower:
                 return True
-                
+
         return False
 
     @property
     def conversation_id(self):
         """Get the current conversation ID."""
-        return self._conversation_id if hasattr(self, '_conversation_id') else None
-        
+        return self._conversation_id if hasattr(self, "_conversation_id") else None
+
     @conversation_id.setter
     def conversation_id(self, value):
         """Set the conversation ID with logging."""
         old_value = self.conversation_id
         self._conversation_id = value
         logger.debug(f"LLMQueryAgent.conversation_id changed from {old_value} to {value}")
-        
+
         # Also update session_id for consistency
         self._session_id = value
-        
+
     @property
     def session_id(self):
         """Get the session ID (alias for conversation_id)."""
         return self.conversation_id
-        
+
     @session_id.setter
     def session_id(self, value):
         """Set the session ID (alias for conversation_id)."""
@@ -426,15 +434,15 @@ class LLMQueryAgent(BaseAgent):
 
             # Execute tools with graph state for message logging
             execution_results = await self.tool_executor.execute_tools(
-                tool_calls, 
-                graph_state=self.graph_state if hasattr(self, 'graph_state') else None
+                tool_calls,
+                graph_state=self.graph_state if hasattr(self, "graph_state") else None,
             )
-            
+
             # Store tool executions in conversation state
             if self.graph_state and "conversation_state" in self.graph_state:
                 for result in execution_results:
-                    tool_name = result.get('tool', 'unknown_tool')
-                    args = result.get('args', {})
+                    tool_name = result.get("tool", "unknown_tool")
+                    args = result.get("args", {})
                     # Log the tool call
                     await self.graph_state["conversation_state"].add_message(
                         role=MessageRole.TOOL,
@@ -444,10 +452,10 @@ class LLMQueryAgent(BaseAgent):
                             "tool_name": tool_name,
                             "tool_args": args,
                             "request_type": "tool_call",
-                            "session_id": self.session_id
+                            "session_id": self.session_id,
                         },
                         sender="orchestrator_graph.orchestrator",
-                        target=f"orchestrator_graph.{tool_name}"
+                        target=f"orchestrator_graph.{tool_name}",
                     )
                     # Log the tool response
                     await self.graph_state["conversation_state"].add_message(
@@ -458,10 +466,10 @@ class LLMQueryAgent(BaseAgent):
                             "tool_name": tool_name,
                             "response_type": "tool_response",
                             "session_id": self.session_id,
-                            "request_id": result.get('request_id')
+                            "request_id": result.get("request_id"),
                         },
                         sender=f"orchestrator_graph.{tool_name}",
-                        target="orchestrator_graph.orchestrator"
+                        target="orchestrator_graph.orchestrator",
                     )
 
             return execution_results
@@ -469,4 +477,4 @@ class LLMQueryAgent(BaseAgent):
         except Exception as e:
             error_msg = f"Error handling tool calls: {str(e)}"
             logger.error(error_msg)
-            raise 
+            raise

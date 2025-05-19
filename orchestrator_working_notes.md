@@ -122,7 +122,7 @@ template_agent/
 │   │   └── __init__.py
 │   ├── tools/
 │   │   └── registry/
-│  
+│
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py
@@ -160,7 +160,7 @@ template_agent/
 │   │   ├── test_llm_service.py
 │   │   ├── test_message_service.py
 │   │   └── test_state_service.py
-│   
+│
 ├── logs/
 │   ├── template_debug_20250513.log
 │   ├── template_debug_20250514.log
@@ -179,7 +179,7 @@ common messages done
 common models done
 common routers done
 common services done
-common state done 
+common state done
 common tools done
 common ui done
 common utils
@@ -188,11 +188,11 @@ common utils
 
 Please review and update as directed below for the files and folders provided in context.
 
-OK, now using @orchestrator_working_notes.md as your guide, please look in the test folders and validate the test files  for all operations and functions that should be tested.  Each test should be complete and ideally test three conditions.  One test that should pass, one test that should fail, and one test that is an edge case.  
+OK, now using @orchestrator_working_notes.md as your guide, please look in the test folders and validate the test files  for all operations and functions that should be tested.  Each test should be complete and ideally test three conditions.  One test that should pass, one test that should fail, and one test that is an edge case.
 
-IF the test file does not exist for a file or function, please create it as needed.  We want 100 percent test coverage of each folder we examine this way.  
+IF the test file does not exist for a file or function, please create it as needed.  We want 100 percent test coverage of each folder we examine this way.
 
-These tests should include Pydantic model validation tests, function parameter validation tests, and function return value validation tests. 
+These tests should include Pydantic model validation tests, function parameter validation tests, and function return value validation tests.
 
 
 

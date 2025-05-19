@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+
 def get_logger(name: str) -> logging.Logger:
     """
     Get a logger instance with the specified name.
@@ -33,10 +34,11 @@ def get_logger(name: str) -> logging.Logger:
     """
     return logging.getLogger(name)
 
+
 def setup_file_logging(log_file: str, level: Optional[int] = None) -> None:
     """
     Setup file-based logging.
-    
+
     Args:
         log_file: Path to log file
         level: Optional logging level
@@ -44,29 +46,26 @@ def setup_file_logging(log_file: str, level: Optional[int] = None) -> None:
     # Ensure log directory exists
     log_path = Path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Create file handler
     handler = logging.FileHandler(log_file)
-    handler.setFormatter(
-        logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-    )
-    
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
     # Add handler to root logger
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
-    
+
     if level:
         root_logger.setLevel(level)
+
 
 def log_exception(logger: logging.Logger, e: Exception, message: str) -> None:
     """
     Log an exception with traceback.
-    
+
     Args:
         logger: Logger instance
         e: Exception to log
         message: Error message
     """
-    logger.error(f"{message}: {str(e)}", exc_info=True) 
+    logger.error(f"{message}: {str(e)}", exc_info=True)

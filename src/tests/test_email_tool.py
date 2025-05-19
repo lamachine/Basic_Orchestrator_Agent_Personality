@@ -1,10 +1,12 @@
 """Tests for the email tool."""
 
-import pytest
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
-from src.tools.email_tool import EmailTool, EmailConfig
+import pytest
+
+from src.tools.email_tool import EmailConfig, EmailTool
+
 
 @pytest.fixture
 def email_config() -> Dict[str, Any]:
@@ -16,13 +18,15 @@ def email_config() -> Dict[str, Any]:
         "password": "test_password",
         "default_from": "test@test.com",
         "use_ssl": True,
-        "timeout": 30
+        "timeout": 30,
     }
+
 
 @pytest.fixture
 def email_tool(email_config: Dict[str, Any]) -> EmailTool:
     """Create a test email tool instance."""
     return EmailTool(email_config)
+
 
 @pytest.mark.asyncio
 async def test_send_email_success(email_tool: EmailTool):
@@ -32,11 +36,11 @@ async def test_send_email_success(email_tool: EmailTool):
         "request_id": "test-123",
         "to": "recipient@test.com",
         "subject": "Test Subject",
-        "body": "Test Body"
+        "body": "Test Body",
     }
-    
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "success"
     assert result["request_id"] == "test-123"
     assert result["message"] == "Email sent successfully"
@@ -45,32 +49,31 @@ async def test_send_email_success(email_tool: EmailTool):
     assert result["data"]["subject"] == "Test Subject"
     assert "timestamp" in result["data"]
 
+
 @pytest.mark.asyncio
 async def test_send_email_missing_fields(email_tool: EmailTool):
     """Test email sending with missing required fields."""
     args = {
         "action": "send_email",
         "request_id": "test-123",
-        "to": "recipient@test.com"
+        "to": "recipient@test.com",
         # Missing subject and body
     }
-    
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "error"
     assert result["request_id"] == "test-123"
     assert "Missing required email fields" in result["message"]
 
+
 @pytest.mark.asyncio
 async def test_list_emails_success(email_tool: EmailTool):
     """Test successful email listing."""
-    args = {
-        "action": "list_emails",
-        "request_id": "test-123"
-    }
-    
+    args = {"action": "list_emails", "request_id": "test-123"}
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "success"
     assert result["request_id"] == "test-123"
     assert result["message"] == "Emails retrieved successfully"
@@ -82,17 +85,14 @@ async def test_list_emails_success(email_tool: EmailTool):
     assert "from" in result["data"]["emails"][0]
     assert "timestamp" in result["data"]["emails"][0]
 
+
 @pytest.mark.asyncio
 async def test_get_email_success(email_tool: EmailTool):
     """Test successful email retrieval."""
-    args = {
-        "action": "get_email",
-        "request_id": "test-123",
-        "email_id": "1"
-    }
-    
+    args = {"action": "get_email", "request_id": "test-123", "email_id": "1"}
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "success"
     assert result["request_id"] == "test-123"
     assert result["message"] == "Email retrieved successfully"
@@ -103,34 +103,34 @@ async def test_get_email_success(email_tool: EmailTool):
     assert "body" in result["data"]
     assert "timestamp" in result["data"]
 
+
 @pytest.mark.asyncio
 async def test_get_email_missing_id(email_tool: EmailTool):
     """Test email retrieval with missing email ID."""
     args = {
         "action": "get_email",
-        "request_id": "test-123"
+        "request_id": "test-123",
         # Missing email_id
     }
-    
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "error"
     assert result["request_id"] == "test-123"
     assert "No email ID specified" in result["message"]
 
+
 @pytest.mark.asyncio
 async def test_unknown_action(email_tool: EmailTool):
     """Test handling of unknown action."""
-    args = {
-        "action": "unknown_action",
-        "request_id": "test-123"
-    }
-    
+    args = {"action": "unknown_action", "request_id": "test-123"}
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "error"
     assert result["request_id"] == "test-123"
     assert "Unknown action" in result["message"]
+
 
 @pytest.mark.asyncio
 async def test_missing_action(email_tool: EmailTool):
@@ -139,9 +139,9 @@ async def test_missing_action(email_tool: EmailTool):
         "request_id": "test-123"
         # Missing action
     }
-    
+
     result = await email_tool.execute(args)
-    
+
     assert result["status"] == "error"
     assert result["request_id"] == "test-123"
-    assert "No action specified" in result["message"] 
+    assert "No action specified" in result["message"]

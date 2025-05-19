@@ -1,16 +1,18 @@
 import os
-from supabase import create_client, Client
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+
+from supabase import Client, create_client
 
 from src.services.logging_service import get_logger
 
 # Initialize logger
 logger = get_logger(__name__)
 
+
 # Initialize database service
 class DBService:
     """Service for interacting with the database."""
-    
+
     def __init__(self):
         """Initialize the database service."""
         url = os.getenv("SUPABASE_URL")  # Preferred: url
@@ -18,7 +20,7 @@ class DBService:
         service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Preferred: service_role_key
         if not (url and service_role_key):
             raise ValueError("url and service_role_key must be set")
-            
+
         self.client: Client = create_client(url, service_role_key)
         self.message_manager = None  # Will be set in main.py
 
@@ -42,7 +44,15 @@ class DBService:
             logger.error(f"Error inserting record into {table_name}: {e}")
             raise RuntimeError(f"Error inserting record into {table_name}: {e}")
 
-    async def select(self, table_name: str, columns: str = "*", filters: Optional[Dict[str, Any]] = None, order_by: Optional[str] = None, order_desc: bool = False, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    async def select(
+        self,
+        table_name: str,
+        columns: str = "*",
+        filters: Optional[Dict[str, Any]] = None,
+        order_by: Optional[str] = None,
+        order_desc: bool = False,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Select records from a table with optional filtering.
         Args:
@@ -72,7 +82,13 @@ class DBService:
             logger.error(f"Error selecting records from {table_name}: {e}")
             raise RuntimeError(f"Error selecting records from {table_name}: {e}")
 
-    async def update(self, table_name: str, record_id: Union[int, str], data: Dict[str, Any], id_column: str = "id") -> Dict[str, Any]:
+    async def update(
+        self,
+        table_name: str,
+        record_id: Union[int, str],
+        data: Dict[str, Any],
+        id_column: str = "id",
+    ) -> Dict[str, Any]:
         """
         Update a record in a table.
         Args:
@@ -86,10 +102,7 @@ class DBService:
             RuntimeError: If update fails
         """
         try:
-            response = self.client.table(table_name)\
-                .update(data)\
-                .eq(id_column, record_id)\
-                .execute()
+            response = self.client.table(table_name).update(data).eq(id_column, record_id).execute()
             if not response.data:
                 raise RuntimeError(f"Update operation returned no data")
             return response.data[0]
@@ -117,4 +130,3 @@ class DBService:
         except Exception as e:
             logger.error(f"Error deleting records from {table_name}: {e}")
             raise RuntimeError(f"Error deleting records from {table_name}: {e}")
-

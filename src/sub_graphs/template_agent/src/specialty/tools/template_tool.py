@@ -10,66 +10,70 @@ It implements:
 5. Tool metadata and documentation
 """
 
-import logging
-from typing import Dict, Any, Optional, List
-from datetime import datetime
-from pydantic import BaseModel, ValidationError
 import asyncio
+import logging
 import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ValidationError
 
 from ...common.services.logging_service import get_logger
 from ..agents.template_agent import TemplateAgent
 
 logger = get_logger(__name__)
 
+
 class ToolInput(BaseModel):
     """Input model for tool requests."""
+
     task: str
     parameters: Dict[str, Any]
     request_id: str
     timestamp: str
 
+
 class TemplateTool:
     """Template tool for running test tools in the sub-graph."""
-    
+
     def __init__(self):
         """Initialize the template tool."""
         self.name = "template_tool"
         self.description = """Template tool for running test tools in the sub-graph.
 This tool acts as a bridge between the orchestrator and test tools within the sub-graph.
 The sub-graph contains various test tools (like test_tool_1) that can be executed.
-The orchestrator should send requests to the template tool with the user's request, 
+The orchestrator should send requests to the template tool with the user's request,
 and it will route them to the appropriate test tool within the sub-graph."""
         self.version = "1.0.0"
         self.capabilities = ["run_test_tool"]
-        
+
         # Initialize the template agent
         self.agent = TemplateAgent(
             name="template_agent",
             prompt_section="You are a template agent that coordinates tool execution.",
-            config={"graph_name": "template_graph"}
+            config={"graph_name": "template_graph"},
         )
-        
+
     async def execute(self, session_state=None, **kwargs) -> Dict[str, Any]:
         """
         Execute the template tool.
-        
+
         Args:
             session_state: Optional session state dictionary to be passed to the agent.
             **kwargs: Tool input parameters
-            
+
         Returns:
             Dict[str, Any]: Tool execution result
         """
         try:
             # Validate input
             input_data = ToolInput(**kwargs)
-            
+
             # Process with template agent
             result = await self.agent.process_message(input_data.task, session_state=session_state)
-            
+
             return result
-            
+
         except ValidationError as e:
             logger.error(f"Input validation error: {e}")
             return {"status": "error", "message": str(e)}
@@ -77,5 +81,6 @@ and it will route them to the appropriate test tool within the sub-graph."""
             logger.error(f"Tool execution error: {e}")
             return {"status": "error", "message": str(e)}
 
+
 # Create singleton instance
-template_tool = TemplateTool() 
+template_tool = TemplateTool()

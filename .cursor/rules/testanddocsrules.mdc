@@ -8,4 +8,4 @@ globs: TO_DO.md, PROJECT_STATUS.md, PROJECT_PLAN.md
 - Create end-to-end tests for critical user flows.
 - Use Supabase local development for database testing.
 - Maintain clear documentation including setup instructions, Supabase schema, RLS policies, and Edge Functions.
-- Never delete any items in PROJECT_PLAN.md, PROJECT_STATUS.md, TO_DO.md or similar.  Use strike through instead.  
+- Never delete any items in PROJECT_PLAN.md, PROJECT_STATUS.md, TO_DO.md or similar.  Use strike through instead.

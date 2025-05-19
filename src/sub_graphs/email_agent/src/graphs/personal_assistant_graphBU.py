@@ -16,11 +16,12 @@ THEN finish the template
 - test the entire stack again
 """
 
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from src.services.logging_service import get_logger
 from src.state.state_manager import StateManager
 from src.state.state_models import MessageRole
-from src.services.logging_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -33,31 +34,35 @@ logger = get_logger(__name__)
 #     ...
 # }
 
+
 # Placeholder for personality logic (not used in sub-graph, but structure is here)
 def apply_personality(message: str, personality: Optional[str] = None) -> str:
     # In a sub-graph, personality is not applied, but this function is here for compatibility
     return message
 
-async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str, Any]) -> Dict[str, Any]:
+
+async def personal_assistant_graph(
+    state: Dict[str, Any], tool_request: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Process a tool request in the personal assistant sub-graph.
     - Auto-instantiates sub-graphs (sub-agents) as needed
     - Requests approval for new sub-graphs if not approved
     - Handles message passing, logging, and state management
     - Supports request ID chaining for traceability
-    
+
     Args:
         state: The current graph state dictionary
         tool_request: The tool request to process
-        
+
     Returns:
         Dict containing the execution results or approval request
     """
     try:
         # --- Sub-graph (sub-agent) auto-instantiation and approval ---
-        sub_graphs = state.setdefault('sub_graphs', {})
-        approved_sub_graphs = state.setdefault('approved_sub_graphs', set())
-        requested_sub_graph = tool_request.get('sub_graph')
+        sub_graphs = state.setdefault("sub_graphs", {})
+        approved_sub_graphs = state.setdefault("approved_sub_graphs", set())
+        requested_sub_graph = tool_request.get("sub_graph")
         if requested_sub_graph and requested_sub_graph not in approved_sub_graphs:
             # Request approval from parent graph
             approval_message = {
@@ -65,7 +70,7 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
                 "message": f"Sub-graph '{requested_sub_graph}' requires approval. Please approve to continue.",
                 "sub_graph": requested_sub_graph,
                 "request_type": "sub_graph_approval",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             logger.debug(f"Requesting approval for sub-graph: {requested_sub_graph}")
             return approval_message
@@ -76,13 +81,15 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
         # --- End sub-graph instantiation/approval ---
 
         # --- StateManager instantiation and request ID chaining ---
-        session_id = state.get('session_id', 'personal_assistant')
+        session_id = state.get("session_id", "personal_assistant")
         state_manager = StateManager()
-        parent_request_id = tool_request.get('parent_request_id')
-        request_id = tool_request.get('request_id')
+        parent_request_id = tool_request.get("parent_request_id")
+        request_id = tool_request.get("request_id")
         # Chain request IDs if parent_request_id is present
         if parent_request_id:
-            chained_request_id = f"{parent_request_id}.{request_id}" if request_id else parent_request_id
+            chained_request_id = (
+                f"{parent_request_id}.{request_id}" if request_id else parent_request_id
+            )
         else:
             chained_request_id = request_id or f"req-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
         # --- End StateManager and request ID chaining ---
@@ -96,23 +103,26 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
                 "timestamp": datetime.now().isoformat(),
                 "request_id": chained_request_id,
                 "parent_request_id": parent_request_id,
-                "task": tool_request.get('task'),
-                "args": tool_request.get('args', {}),
+                "task": tool_request.get("task"),
+                "args": tool_request.get("args", {}),
                 "sender": "personal_assistant.sub_graph_interface",
-                "target": "personal_assistant.personal_assistant_graph"
-            }
+                "target": "personal_assistant.personal_assistant_graph",
+            },
         )
         # Placeholder for actual personal assistant functionality
         result = {
             "status": "success",
-            "message": apply_personality(f"[Placeholder] Personal assistant handled task: {tool_request.get('task')}", None),
+            "message": apply_personality(
+                f"[Placeholder] Personal assistant handled task: {tool_request.get('task')}",
+                None,
+            ),
             "data": {
-                "task": tool_request.get('task'),
-                "args": tool_request.get('args', {}),
+                "task": tool_request.get("task"),
+                "args": tool_request.get("args", {}),
                 "request_id": chained_request_id,
                 "parent_request_id": parent_request_id,
-                "timestamp": datetime.now().isoformat()
-            }
+                "timestamp": datetime.now().isoformat(),
+            },
         }
         # Log result using StateManager
         await state_manager.update_session(
@@ -125,15 +135,15 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
                 "parent_request_id": parent_request_id,
                 "result": result,
                 "sender": "personal_assistant.personal_assistant_graph",
-                "target": "personal_assistant.sub_graph_interface"
-            }
+                "target": "personal_assistant.sub_graph_interface",
+            },
         )
         return result
     except Exception as e:
         error_msg = f"Error in personal assistant graph: {str(e)}"
         logger.error(error_msg)
         # Log error using StateManager
-        session_id = state.get('session_id', 'personal_assistant')
+        session_id = state.get("session_id", "personal_assistant")
         state_manager = StateManager()
         await state_manager.update_session(
             session_id=session_id,
@@ -141,14 +151,11 @@ async def personal_assistant_graph(state: Dict[str, Any], tool_request: Dict[str
             content=error_msg,
             metadata={
                 "timestamp": datetime.now().isoformat(),
-                "request_id": tool_request.get('request_id'),
-                "parent_request_id": tool_request.get('parent_request_id'),
+                "request_id": tool_request.get("request_id"),
+                "parent_request_id": tool_request.get("parent_request_id"),
                 "error": str(e),
                 "sender": "personal_assistant.personal_assistant_graph",
-                "target": "personal_assistant.sub_graph_interface"
-            }
+                "target": "personal_assistant.sub_graph_interface",
+            },
         )
-        return {
-            "status": "error",
-            "message": error_msg
-        } 
+        return {"status": "error", "message": error_msg}
